@@ -187,6 +187,8 @@ api.get('/init', async (c) => {
 });
 
 // ── POST /generate-digest ──────────────────
+// ── POST /generate-digest ──────────────────
+// ── POST /generate-digest ──────────────────
 api.post('/generate-digest', async (c) => {
   try {
     const weekKey = getWeekKey();
@@ -202,7 +204,7 @@ api.post('/generate-digest', async (c) => {
       });
     }
 
-    // ── Week-over-week trend ─────────────────
+    // ── Load previous week data ──────────────────
     const prevReasonKeys = [
       ...new Set(await listGet(`${prevWeekKey}:reasonKeys`)),
     ];
@@ -215,100 +217,113 @@ api.post('/generate-digest', async (c) => {
     }
     const prevTotal = Object.values(prevByReason).reduce((a, b) => a + b, 0);
 
-    let trendLine = '';
-    if (prevTotal > 0) {
-      const diff = stats.totalRemovals - prevTotal;
-      const arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '→';
-      const absDiff = Math.abs(diff);
-      trendLine = `${arrow} ${absDiff > 0 ? `${absDiff} ${diff > 0 ? 'more' : 'fewer'} than last week (${prevTotal})` : 'Same as last week'}`;
+    // ── Helper: week-over-week tag ───────────────
+    function wow(current: number, prev: number): string {
+      if (prev === 0) return '';
+      const diff = current - prev;
+      if (diff === 0) return ' (same as last week)';
+      const pct = Math.round(Math.abs(diff / prev) * 100);
+      return diff > 0 ? ` (+${pct}% vs last week)` : ` (-${pct}% vs last week)`;
     }
 
-    // ── No reason given nudge ───────────────
-    const noReasonCount = stats.byReason['No reason given'] ?? 0;
-    const noReasonPct = Math.round((noReasonCount / stats.totalRemovals) * 100);
-    const noReasonNudge =
-      noReasonCount > 0
-        ? `\n> ⚠️ **${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} (${noReasonPct}%) had no reason attached.** Using removal reasons helps ModStat track rule enforcement accurately.\n`
-        : '';
-
+    // ── Date labels ──────────────────────────────
     const weekStart = new Date(stats.weekStart).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
     });
-
     const weekEnd = new Date(stats.weekEnd).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
     });
 
-    // ── Reason breakdown ────────────────────
-    const reasonLines = Object.entries(stats.byReason)
-      .sort((a, b) => b[1] - a[1])
-      .map(([reason, count]) => {
-        const pct = Math.round((count / stats.totalRemovals) * 100);
-        const bar = '█'.repeat(Math.min(Math.floor(pct / 5), 20));
-        return `${bar} **${reason}**: ${count} (${pct}%)`;
-      })
-      .join('\n\n');
-
-    // ── Mod activity ────────────────────────
-    const modLines = Object.entries(stats.byMod)
-      .sort((a, b) => b[1] - a[1])
-      .map(([mod, count]) => `u/${mod}: ${count} actions`)
-      .join('\n\n');
-
-    // ── Offender list ───────────────────────
-    const offenderLines =
-      stats.topOffenders.length > 0
-        ? stats.topOffenders
-            .map((o, i) => `${i + 1}. u/${o.username}: ${o.count} removals`)
-            .join('\n\n')
-        : 'No repeat offenders this week';
-
-    // ── Busiest day ─────────────────────────
+    // ── Derived values ───────────────────────────
     const busiestDay = Object.entries(stats.byDay).sort(
       (a, b) => b[1] - a[1]
     )[0];
 
-    // ── Posts vs Comments ───────────────────
-    const contentBreakdown = `📄 Posts: **${stats.postCount}** · 💬 Comments: **${stats.commentCount}**`;
+    const topViolation = Object.entries(stats.byReason)
+      .filter(([r]) => r !== 'No reason given')
+      .sort((a, b) => b[1] - a[1])[0];
 
+    const noReasonCount = stats.byReason['No reason given'] ?? 0;
+
+    // ── Section: glance (two spaces before \n = Reddit line break) ──
+    const glance = [
+      `📊 **${stats.totalRemovals} removals** this week${wow(stats.totalRemovals, prevTotal)}`,
+      `📄 ${stats.postCount} posts removed · 💬 ${stats.commentCount} comments removed`,
+      topViolation
+        ? `🚨 Top violation: **${topViolation[0]}** — ${topViolation[1]} (${Math.round((topViolation[1] / stats.totalRemovals) * 100)}%)`
+        : '',
+      busiestDay && busiestDay[1] > 0
+        ? `📅 Busiest day: **${busiestDay[0]}** (${busiestDay[1]} removals)`
+        : '',
+      `👤 Repeat offenders flagged: **${stats.topOffenders.filter((o) => o.count >= 2).length}**`,
+    ]
+      .filter(Boolean)
+      .join('  \n'); // two spaces before \n = Reddit forced line break
+
+    // ── Section: rules breakdown ─────────────────
+    const ruleLines = Object.entries(stats.byReason)
+      .filter(([r, count]) => r !== 'No reason given' && count > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([rule, count]) => {
+        const pct = Math.round((count / stats.totalRemovals) * 100);
+        const wowTag = wow(count, prevByReason[rule] ?? 0);
+        return `- **${rule}**: ${count} (${pct}%)${wowTag}`;
+      })
+      .join('\n');
+
+    // ── Section: offenders ───────────────────────
+    const offenderLines =
+      stats.topOffenders.length > 0
+        ? stats.topOffenders
+            .map((o, i) => `${i + 1}. u/${o.username} — ${o.count} removals`)
+            .join('\n')
+        : 'None this week.';
+
+    // ── Section: mod activity ────────────────────
+    const modLines =
+      Object.entries(stats.byMod)
+        .sort((a, b) => b[1] - a[1])
+        .map(([mod, count]) => `- u/${mod}: ${count} actions`)
+        .join('\n') || 'No activity recorded.';
+
+    // ── No-reason nudge (only shown if needed) ───
+    const nudge =
+      noReasonCount > 0
+        ? `\n---\n⚠️ ${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} had no reason attached. Adding reasons helps ModStat track rule enforcement accurately.`
+        : '';
+
+    // ── Assemble — NO bold title line in body ────
+    // Post title already shows "ModStat Weekly Report", no need to repeat it.
     const digestText = `
-# 📊 ModStat Weekly Report — ${weekStart} to ${weekEnd}
-
-**Total Removals This Week: ${stats.totalRemovals}**${trendLine ? `  \n*${trendLine}*` : ''}
-
-${contentBreakdown}
-${noReasonNudge}
----
-
-## Removal Reasons Breakdown
-
-${reasonLines || 'No data yet'}
+${glance}
 
 ---
 
-## Top Repeat Offenders
+**⚖️ Rules Breakdown**
+
+${ruleLines || 'No rule data yet.'}
+
+---
+
+**👤 Repeat Offenders**
 
 ${offenderLines}
 
 ---
 
-## Busiest Day
+**👮 Mod Team Activity**
 
-${busiestDay ? `**${busiestDay[0]}** with ${busiestDay[1]} removals` : 'No data yet'}
-
----
-
-## Mod Activity
-
-${modLines || 'No data yet'}
+${modLines}
+${nudge}
 
 ---
 
-*Generated by ModStat • r/${context.subredditName}*
-    `.trim();
+*Generated by ModStat · r/${context.subredditName ?? ''}*
+`.trim();
 
+    // ── Post to subreddit ────────────────────────
     const post = await reddit.submitPost({
       subredditName: context.subredditName ?? '',
       title: `[ModStat] Weekly Mod Report — ${weekStart} to ${weekEnd}`,
@@ -318,7 +333,7 @@ ${modLines || 'No data yet'}
     try {
       await reddit.distinguish(post.id, true);
     } catch {
-      // distinguish may fail in playtest - non-fatal
+      // distinguish may fail in playtest — non-fatal
     }
 
     return c.json<DigestResponse>({

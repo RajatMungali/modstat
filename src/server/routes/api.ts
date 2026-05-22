@@ -1,17 +1,18 @@
 // ============================================
 // MODSTAT — API Routes
 // ============================================
-import { listGet } from './triggers';
 import { Hono } from 'hono';
 import { context, redis, reddit } from '@devvit/web/server';
 import type {
   InitResponse,
   DigestResponse,
-  WeeklyStats,
   RemovalEntry,
   ErrorResponse,
 } from '../../shared/api';
 import { REMOVAL_REASON_NONE } from '../../shared/api';
+import { listGet } from '../core/redis-list';
+import { buildWeeklyStats } from '../core/stats';
+import { getPrevWeekKey, getWeekKey } from '../core/week';
 
 export const api = new Hono();
 
@@ -29,125 +30,6 @@ async function checkModerator(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-// ── Helper: get current week key ───────────
-function getWeekKey(): string {
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(
-    ((now.getTime() - startOfYear.getTime()) / 86400000 +
-      startOfYear.getDay() +
-      1) /
-      7
-  );
-  return `week:${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-}
-
-// ── Helper: get previous week key ──────────
-function getPrevWeekKey(): string {
-  const now = new Date();
-  now.setDate(now.getDate() - 7);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(
-    ((now.getTime() - startOfYear.getTime()) / 86400000 +
-      startOfYear.getDay() +
-      1) /
-      7
-  );
-  return `week:${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-}
-
-// ── Helper: deduplicate array ───────────────
-function unique(arr: string[]): string[] {
-  return [...new Set(arr)];
-}
-
-// ── Helper: build weekly stats ──────────────
-async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
-  const days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-
-  const reasonKeys = [...new Set(await listGet(`${weekKey}:reasonKeys`))];
-  const modKeys = [...new Set(await listGet(`${weekKey}:modKeys`))];
-  const offenderKeys = [...new Set(await listGet(`${weekKey}:offenderKeys`))];
-
-  const byReason: Record<string, number> = {};
-  for (const reason of reasonKeys) {
-    const val = await redis
-      .get(`${weekKey}:reason:${reason}`)
-      .catch(() => null);
-    byReason[reason] = val ? parseInt(val) : 0;
-  }
-
-  const byMod: Record<string, number> = {};
-  for (const mod of modKeys) {
-    const val = await redis.get(`${weekKey}:mod:${mod}`).catch(() => null);
-    byMod[mod] = val ? parseInt(val) : 0;
-  }
-
-  const byDay: Record<string, number> = {};
-  for (const day of days) {
-    const val = await redis.get(`${weekKey}:day:${day}`).catch(() => null);
-    byDay[day] = val ? parseInt(val) : 0;
-  }
-
-  const offenderList: Array<{ username: string; count: number }> = [];
-  for (const username of offenderKeys) {
-    const val = await redis
-      .get(`${weekKey}:offender:${username}`)
-      .catch(() => null);
-    offenderList.push({ username, count: val ? parseInt(val) : 0 });
-  }
-  offenderList.sort((a, b) => b.count - a.count);
-
-  const totalRemovals = Object.values(byReason).reduce((a, b) => a + b, 0);
-
-  const removalIds = await listGet(`${weekKey}:list`);
-  let postCount = 0;
-
-  for (const id of removalIds) {
-    const raw = await redis.get(`removal:${id}`).catch(() => null);
-
-    if (raw) {
-      try {
-        const entry = JSON.parse(raw) as RemovalEntry;
-
-        if (entry.contentType === 'post') {
-          postCount++;
-        }
-      } catch {}
-    }
-  }
-
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - dayOfWeek);
-  weekStart.setHours(0, 0, 0, 0);
-
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  return {
-    totalRemovals,
-    byReason,
-    byMod,
-    byDay,
-    topOffenders: offenderList.slice(0, 10),
-    weekStart: weekStart.getTime(),
-    weekEnd: weekEnd.getTime(),
-    postCount,
-  };
 }
 
 // ── GET /init ──────────────────────────────

@@ -5,13 +5,16 @@
 import { Hono } from 'hono';
 import type { TriggerResponse } from '@devvit/web/shared';
 import { context, redis, reddit, scheduler } from '@devvit/web/server';
-import type { RemovalEntry, WeeklyStats } from '../../shared/api';
+import type { RemovalEntry } from '../../shared/api';
 import {
   REMOVAL_REASON_AUTOMOD,
   REMOVAL_REASON_AUTOMOD_PENDING,
   REMOVAL_REASON_NONE,
   REMOVAL_REASON_REDDIT_FILTER,
 } from '../../shared/api';
+import { listGet, listPush } from '../core/redis-list';
+import { buildWeeklyStats } from '../core/stats';
+import { getDayName, getPrevWeekKey, getWeekKey } from '../core/week';
 
 export const triggers = new Hono();
 
@@ -37,47 +40,6 @@ function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-// ── Helper: get current week key ───────────
-function getWeekKey(): string {
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(
-    ((now.getTime() - startOfYear.getTime()) / 86400000 +
-      startOfYear.getDay() +
-      1) /
-      7
-  );
-  return `week:${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-}
-
-// ── Helper: get previous week key ──────────
-function getPrevWeekKey(): string {
-  const now = new Date();
-  now.setDate(now.getDate() - 7);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(
-    ((now.getTime() - startOfYear.getTime()) / 86400000 +
-      startOfYear.getDay() +
-      1) /
-      7
-  );
-  return `week:${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-}
-
-// ── Helper: get day name ───────────────────
-function getDayName(): string {
-  const days = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ] as const;
-  return days[new Date().getDay()] ?? 'Sunday';
-}
-
 // ── Helper: safe increment ─────────────────
 async function increment(key: string): Promise<void> {
   const current = await redis.get(key);
@@ -90,21 +52,6 @@ async function decrement(key: string): Promise<void> {
   const current = await redis.get(key);
   const val = current ? parseInt(current) : 0;
   await redis.set(key, String(Math.max(0, val - 1)));
-}
-
-// ── Helper: append to list ─────────────────
-async function listPush(key: string, value: string): Promise<void> {
-  const current = await redis.get(key);
-  const arr: string[] = current ? JSON.parse(current) : [];
-  arr.unshift(value);
-  if (arr.length > 200) arr.splice(200);
-  await redis.set(key, JSON.stringify(arr));
-}
-
-// ── Helper: get list ───────────────────────
-export async function listGet(key: string): Promise<string[]> {
-  const current = await redis.get(key);
-  return current ? JSON.parse(current) : [];
 }
 
 // ── Helper: store redditId → entryId mapping ──
@@ -339,77 +286,6 @@ function extractReasonFromStickyBody(
   }
 
   return messageText.trim();
-}
-
-// ── Helper: build weekly stats ──────────────
-async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
-  const days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
-
-  const reasonKeys = [...new Set(await listGet(`${weekKey}:reasonKeys`))];
-  const modKeys = [...new Set(await listGet(`${weekKey}:modKeys`))];
-  const offenderKeys = [...new Set(await listGet(`${weekKey}:offenderKeys`))];
-
-  const byReason: Record<string, number> = {};
-  for (const reason of reasonKeys) {
-    const val = await redis
-      .get(`${weekKey}:reason:${reason}`)
-      .catch(() => null);
-    byReason[reason] = val ? parseInt(val) : 0;
-  }
-
-  const byMod: Record<string, number> = {};
-  for (const mod of modKeys) {
-    const val = await redis.get(`${weekKey}:mod:${mod}`).catch(() => null);
-    byMod[mod] = val ? parseInt(val) : 0;
-  }
-
-  const byDay: Record<string, number> = {};
-  for (const day of days) {
-    const val = await redis.get(`${weekKey}:day:${day}`).catch(() => null);
-    byDay[day] = val ? parseInt(val) : 0;
-  }
-
-  const offenderList: Array<{ username: string; count: number }> = [];
-  for (const username of offenderKeys) {
-    const val = await redis
-      .get(`${weekKey}:offender:${username}`)
-      .catch(() => null);
-    offenderList.push({ username, count: val ? parseInt(val) : 0 });
-  }
-  offenderList.sort((a, b) => b.count - a.count);
-
-  const totalRemovals = Object.values(byReason).reduce((a, b) => a + b, 0);
-
-  const removalIds = await listGet(`${weekKey}:list`);
-  const postCount = removalIds.length;
-
-  const now = new Date();
-  const dayOfWeek = now.getDay();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - dayOfWeek);
-  weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  return {
-    totalRemovals,
-    byReason,
-    byMod,
-    byDay,
-    topOffenders: offenderList.slice(0, 10),
-    weekStart: weekStart.getTime(),
-    weekEnd: weekEnd.getTime(),
-    postCount,
-  };
 }
 
 // ── Helper: check if targetComment is real ──

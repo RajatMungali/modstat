@@ -5,6 +5,7 @@
 import { Hono } from 'hono';
 import type { UiResponse } from '@devvit/web/shared';
 import { context, reddit, redis } from '@devvit/web/server';
+import { getWeekKeyForWeekOffset } from '../core/week';
 
 export const menu = new Hono();
 
@@ -141,21 +142,8 @@ menu.post('/seed-demo-data', async (c) => {
       },
     ];
 
-    function weekKeyForOffset(offset: number): string {
-      const now = new Date();
-      now.setDate(now.getDate() + offset * 7);
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      const weekNum = Math.ceil(
-        ((now.getTime() - startOfYear.getTime()) / 86400000 +
-          startOfYear.getDay() +
-          1) /
-          7
-      );
-      return `week:${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-    }
-
     for (const week of weeks) {
-      const wk = weekKeyForOffset(week.offset);
+      const wk = getWeekKeyForWeekOffset(week.offset);
 
       for (let i = 0; i < rules.length; i++)
         await redis.set(`${wk}:reason:${rules[i]}`, String(week.byRule[i]));

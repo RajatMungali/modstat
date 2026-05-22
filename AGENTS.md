@@ -3,21 +3,24 @@ You are writing a Devvit web application that will be executed on Reddit.com.
 ## Tech Stack
 
 - **Frontend**: React 19, Tailwind CSS 4, Vite
-- **Backend**: Node.js v22 serverless environment (Devvit), Hono, TRPC
-- **Communication**: tRPC v11 for end-to-end type safety
+- **Backend**: Node.js v22 serverless environment (Devvit), Hono
+- **Communication**: REST JSON under `/api` (init, digest, clear-week)
 
 ## Layout & Architecture
 
 - `/src/server`: **Backend Code**. This runs in a secure, serverless environment.
-  - `trpc.ts`: Defines the API router and procedures.
   - `index.ts`: Main server entry point (Hono app).
+  - `core/`: Shared week keys, Redis list helpers, weekly stats builder.
+  - `routes/triggers.ts`: Mod action triggers, scheduler, removal reason pipeline.
+  - `routes/api.ts`: Dashboard API for moderators.
+  - `routes/menu.ts`: Subreddit menu actions (dashboard post, demo seed).
   - Access `redis`, `reddit`, and `context` here via `@devvit/web/server`.
 - `/src/client`: **Frontend Code**. This is executed inside of an iFrame on reddit.com
   - To add an entrypoint, create a HTML file and add to the mapping inside of `devvit.json`
   - Entrypoints:
     - `game.html`: The main React entry point (Expanded View).
     - `splash.html`: The initial React entry point (Inline View). This will be shown in the reddit.com feed. Please keep it fast and keep heavy dependencies inside of `game.html`
-- `/src/shared`: **Shared Code**. Code to share between the client and server
+- `/src/shared`: **Shared Code**. Types and removal-reason label constants (`api.ts`).
 
 ## Frontend
 

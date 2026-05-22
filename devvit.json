@@ -38,7 +38,8 @@
   "forms": {},
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
-    "onModAction": "/internal/triggers/on-mod-action"
+    "onModAction": "/internal/triggers/on-mod-action",
+    "onAutomoderatorFilterPost": "/internal/triggers/on-automoderator-filter-post"
   },
   "scheduler": {
     "tasks": {

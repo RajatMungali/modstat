@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "devvit-mcp": {
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": ["-y", "@devvit/mcp"]
+    }
+  }
+}

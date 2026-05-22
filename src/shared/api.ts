@@ -2,6 +2,18 @@
 // MODSTAT — Shared Types
 // ============================================
 
+/** Shown when a human mod removes without selecting a removal reason. */
+export const REMOVAL_REASON_NONE = 'No removal reason selected';
+
+/** AutoMod filtered to queue; not yet confirmed by a human mod. */
+export const REMOVAL_REASON_AUTOMOD_PENDING = 'AutoMod (mod queue)';
+
+/** AutoMod removal confirmed or logged as AutoMod. */
+export const REMOVAL_REASON_AUTOMOD = 'AutoMod';
+
+/** Reddit spam/filter pipeline (u/reddit). */
+export const REMOVAL_REASON_REDDIT_FILTER = 'Reddit filter';
+
 export type RemovalEntry = {
   id: string;
   redditId: string;

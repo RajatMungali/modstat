@@ -6,13 +6,31 @@ import { Hono } from 'hono';
 import type { TriggerResponse } from '@devvit/web/shared';
 import { context, redis, reddit, scheduler } from '@devvit/web/server';
 import type { RemovalEntry, WeeklyStats } from '../../shared/api';
+import {
+  REMOVAL_REASON_AUTOMOD,
+  REMOVAL_REASON_AUTOMOD_PENDING,
+  REMOVAL_REASON_NONE,
+  REMOVAL_REASON_REDDIT_FILTER,
+} from '../../shared/api';
 
 export const triggers = new Hono();
 
 // ── Constants ──────────────────────────────
-const REASON_AUTOMOD_PENDING = 'AutoModerator (review in mod queue)';
-const REASON_AUTOMOD_CONFIRMED = 'Removed by AutoModerator';
-const REASON_REDDIT_FILTER = 'Removed by Reddit filter';
+const REASON_AUTOMOD_PENDING = REMOVAL_REASON_AUTOMOD_PENDING;
+const REASON_AUTOMOD_CONFIRMED = REMOVAL_REASON_AUTOMOD;
+const REASON_REDDIT_FILTER = REMOVAL_REASON_REDDIT_FILTER;
+const NO_REASON = REMOVAL_REASON_NONE;
+const RECONCILE_BATCH_LIMIT = 40;
+const RECONCILE_MIN_AGE_MS = 15_000;
+
+type StoredRemovalEntry = RemovalEntry & { reasonFinal?: boolean };
+
+type ModActionReasonFields = {
+  type?: string;
+  description?: string;
+  details?: string;
+  target?: { id?: string };
+};
 
 // ── Helper: generate unique ID ─────────────
 function makeId(): string {
@@ -48,7 +66,7 @@ function getPrevWeekKey(): string {
 
 // ── Helper: get day name ───────────────────
 function getDayName(): string {
-  return [
+  const days = [
     'Sunday',
     'Monday',
     'Tuesday',
@@ -56,7 +74,8 @@ function getDayName(): string {
     'Thursday',
     'Friday',
     'Saturday',
-  ][new Date().getDay()];
+  ] as const;
+  return days[new Date().getDay()] ?? 'Sunday';
 }
 
 // ── Helper: safe increment ─────────────────
@@ -98,7 +117,8 @@ async function setRedditIdMap(
 
 // ── Helper: get entryId from redditId ──────
 async function getEntryIdByRedditId(redditId: string): Promise<string | null> {
-  return await redis.get(`redditid:${redditId}`).catch(() => null);
+  const value = await redis.get(`redditid:${redditId}`).catch(() => null);
+  return value ?? null;
 }
 
 // ── Helper: clear redditId mapping ─────────
@@ -106,7 +126,197 @@ async function clearRedditIdMap(redditId: string): Promise<void> {
   await redis.del(`redditid:${redditId}`).catch(() => null);
 }
 
+// ── Helper: normalize post fullname ────────
+function normalizeRedditPostId(id: string): string {
+  const trimmed = id.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('t3_')) return trimmed;
+  return `t3_${trimmed}`;
+}
+
+function isPostFullname(id: string): id is `t3_${string}` {
+  return id.startsWith('t3_');
+}
+
+function extractPostIdFromRecord(
+  record: Record<string, unknown> | null | undefined
+): string {
+  if (!record) return '';
+  const raw = String(record.id ?? record.name ?? '');
+  if (!raw) return '';
+  return raw.startsWith('t3_') ? raw : normalizeRedditPostId(raw);
+}
+
+function extractPostIdFromStickyComment(
+  tc: Record<string, unknown> | null
+): string {
+  if (!tc) return '';
+  const linkId = String(tc.linkId ?? tc.link_id ?? '');
+  if (linkId.startsWith('t3_')) return linkId;
+  const parentId = String(tc.parentId ?? tc.parent_id ?? '');
+  if (parentId.startsWith('t3_')) return parentId;
+  return '';
+}
+
+function extractPostIdFromBody(body: Record<string, unknown>): string {
+  const fromPost = extractPostIdFromRecord(
+    body.targetPost as Record<string, unknown> | undefined
+  );
+  if (fromPost) return fromPost;
+
+  const target = body.target as Record<string, unknown> | undefined;
+  if (target) {
+    const targetId = String(target.id ?? '');
+    if (targetId.startsWith('t3_')) return targetId;
+  }
+
+  const fromComment = extractPostIdFromStickyComment(
+    (body.targetComment as Record<string, unknown> | null) ?? null
+  );
+  if (fromComment) return fromComment;
+
+  const explicit = String(body.postId ?? body.post_id ?? '');
+  if (explicit) return normalizeRedditPostId(explicit);
+
+  return '';
+}
+
+function pickModActionReasonText(action: ModActionReasonFields): string | null {
+  const text = [action.description, action.details]
+    .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+    .join(' — ')
+    .trim();
+  return text.length > 0 ? text : null;
+}
+
+async function findEntryIdByRedditId(redditPostId: string): Promise<string | null> {
+  const normalized = normalizeRedditPostId(redditPostId);
+  if (!normalized) return null;
+
+  const mapped = await getEntryIdByRedditId(normalized);
+  if (mapped) return mapped;
+
+  const weekKey = getWeekKey();
+  const ids = await listGet(`${weekKey}:list`);
+  for (const entryId of ids) {
+    const raw = await redis.get(`removal:${entryId}`).catch(() => null);
+    if (!raw) continue;
+    const entry = JSON.parse(raw) as RemovalEntry;
+    if (normalizeRedditPostId(entry.redditId) === normalized) return entryId;
+  }
+  return null;
+}
+
+async function storePendingAutomodReason(
+  postId: string,
+  reason: string
+): Promise<void> {
+  const normalized = normalizeRedditPostId(postId);
+  if (!normalized || !reason.trim()) return;
+  await redis.set(`pendingreason:${normalized}`, reason.trim());
+}
+
+async function consumePendingAutomodReason(
+  postId: string
+): Promise<string | null> {
+  const normalized = normalizeRedditPostId(postId);
+  if (!normalized) return null;
+  const key = `pendingreason:${normalized}`;
+  const pending = await redis.get(key).catch(() => null);
+  if (!pending) return null;
+  await redis.del(key).catch(() => null);
+  const trimmed = pending.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function fetchRemovalReasonFromModLog(
+  postId: string
+): Promise<string | null> {
+  const normalized = normalizeRedditPostId(postId);
+  if (!isPostFullname(normalized)) return null;
+
+  const subredditName = context.subredditName ?? '';
+  if (!subredditName) return null;
+
+  try {
+    const actions = await reddit
+      .getModerationLog({
+        subredditName,
+        more: {
+          parentId: normalized,
+          children: [],
+          depth: 1,
+        },
+        limit: 25,
+        pageSize: 25,
+      })
+      .all();
+
+    let fromAddReason: string | null = null;
+    let fromRemoval: string | null = null;
+
+    for (const action of actions) {
+      const typed = action as ModActionReasonFields;
+      if (typed.type === 'addremovalreason') {
+        const text = pickModActionReasonText(typed);
+        if (text) fromAddReason = text;
+      }
+      if (
+        (typed.type === 'removelink' ||
+          typed.type === 'spamlink' ||
+          typed.type === 'filterlink') &&
+        !fromRemoval
+      ) {
+        const text = pickModActionReasonText(typed);
+        if (text && text.toLowerCase() !== 'remove') fromRemoval = text;
+      }
+    }
+
+    return fromAddReason ?? fromRemoval;
+  } catch (err) {
+    console.error('[ModStat] fetchRemovalReasonFromModLog error:', err);
+    return null;
+  }
+}
+
+async function resolvePostIdForAddRemovalReason(
+  reasonTitle: string
+): Promise<string> {
+  const subredditName = context.subredditName ?? '';
+  if (!subredditName) return '';
+
+  try {
+    const actions = await reddit
+      .getModerationLog({
+        subredditName,
+        type: 'addremovalreason',
+        limit: 10,
+        pageSize: 10,
+      })
+      .all();
+
+    for (const action of actions) {
+      const targetId = action.target?.id ?? '';
+      if (!targetId.startsWith('t3_')) continue;
+      if (!reasonTitle) return targetId;
+
+      const desc = pickModActionReasonText(action as ModActionReasonFields);
+      if (desc && desc.toLowerCase().includes(reasonTitle.toLowerCase())) {
+        return targetId;
+      }
+    }
+
+    const newest = actions.find((a) => a.target?.id?.startsWith('t3_'));
+    return newest?.target?.id ?? '';
+  } catch (err) {
+    console.error('[ModStat] resolvePostIdForAddRemovalReason error:', err);
+    return '';
+  }
+}
+
 // ── Helper: extract reason from sticky body ─
+// Reddit saved responses often send: "{linked rule title} - {message body}"
+// e.g. "No Promo - …" when the template name is "Prom" and rule is "No Promo".
 function extractReasonFromStickyBody(
   messageText: string,
   subredditName: string
@@ -114,7 +324,8 @@ function extractReasonFromStickyBody(
   const parts = messageText.split(' - ');
 
   if (parts.length > 1) {
-    return parts[0].trim();
+    const first = parts[0];
+    if (first) return first.trim();
   }
 
   if (
@@ -248,6 +459,9 @@ async function saveRemoval(entry: RemovalEntry): Promise<void> {
   await listPush(`${weekKey}:reasonKeys`, entry.removalReason);
   await listPush(`${weekKey}:modKeys`, entry.modName);
   await listPush(`${weekKey}:offenderKeys`, entry.authorName);
+  if (entry.redditId) {
+    await setRedditIdMap(entry.redditId, entry.id);
+  }
   console.log(
     `[ModStat] Logged post: "${entry.title}" | mod:${entry.modName} | reason:${entry.removalReason}`
   );
@@ -285,7 +499,7 @@ async function updateRemovalEntry(
   const raw = await redis.get(`removal:${entryId}`).catch(() => null);
   if (!raw) return;
 
-  const entry = JSON.parse(raw) as RemovalEntry & { reasonFinal?: boolean };
+  const entry = JSON.parse(raw) as StoredRemovalEntry;
   const oldReason = entry.removalReason;
   const oldMod = entry.modName;
 
@@ -306,36 +520,34 @@ async function updateRemovalEntry(
   );
 }
 
-// ── Helper: patch the most recent removal's reason ─────────────────────────
-async function patchLatestReason(
+// ── Helper: patch a specific entry's reason ────────────────────────────────
+async function patchReasonForEntry(
+  entryId: string,
   reason: string,
   isFinal: boolean = false
-): Promise<void> {
-  if (reason === 'No reason given') return;
+): Promise<boolean> {
+  if (reason === NO_REASON) return false;
 
   const weekKey = getWeekKey();
-  const ids = await listGet(`${weekKey}:list`);
-  if (ids.length === 0) return;
+  const raw = await redis.get(`removal:${entryId}`).catch(() => null);
+  if (!raw) return false;
 
-  const raw = await redis.get(`removal:${ids[0]}`);
-  if (!raw) return;
-
-  const entry = JSON.parse(raw) as RemovalEntry & { reasonFinal?: boolean };
+  const entry = JSON.parse(raw) as StoredRemovalEntry;
 
   if (entry.reasonFinal && !isFinal) {
     console.log(
-      `[ModStat] Sticky skipped — reason already finalised as "${entry.removalReason}"`
+      `[ModStat] Reason patch skipped — already final: "${entry.removalReason}"`
     );
-    return;
+    return false;
   }
 
   const oldReason = entry.removalReason;
   if (oldReason === reason) {
     if (isFinal && !entry.reasonFinal) {
       entry.reasonFinal = true;
-      await redis.set(`removal:${ids[0]}`, JSON.stringify(entry));
+      await redis.set(`removal:${entryId}`, JSON.stringify(entry));
     }
-    return;
+    return true;
   }
 
   await decrement(`${weekKey}:reason:${oldReason}`);
@@ -345,10 +557,57 @@ async function patchLatestReason(
   entry.removalReason = reason;
   if (isFinal) entry.reasonFinal = true;
 
-  await redis.set(`removal:${ids[0]}`, JSON.stringify(entry));
+  await redis.set(`removal:${entryId}`, JSON.stringify(entry));
   console.log(
-    `[ModStat] Reason patched: "${oldReason}" → "${reason}"${isFinal ? ' [final]' : ''}`
+    `[ModStat] Reason patched for ${entry.redditId}: "${oldReason}" → "${reason}"${isFinal ? ' [final]' : ''}`
   );
+  return true;
+}
+
+async function patchReasonForPost(
+  redditPostId: string,
+  reason: string,
+  isFinal: boolean = false
+): Promise<boolean> {
+  const normalized = normalizeRedditPostId(redditPostId);
+  if (!normalized) return false;
+
+  const entryId = await findEntryIdByRedditId(normalized);
+  if (!entryId) {
+    console.log(`[ModStat] No entry for ${normalized} — cannot patch reason`);
+    return false;
+  }
+
+  return patchReasonForEntry(entryId, reason, isFinal);
+}
+
+async function reconcilePendingRemovalReasons(): Promise<void> {
+  const weekKey = getWeekKey();
+  const ids = await listGet(`${weekKey}:list`);
+  let updated = 0;
+
+  for (const entryId of ids.slice(0, RECONCILE_BATCH_LIMIT)) {
+    const raw = await redis.get(`removal:${entryId}`).catch(() => null);
+    if (!raw) continue;
+
+    const entry = JSON.parse(raw) as StoredRemovalEntry;
+    if (entry.reasonFinal) continue;
+
+    const needsReason =
+      entry.removalReason === NO_REASON ||
+      entry.removalReason === REASON_AUTOMOD_PENDING;
+    if (!needsReason) continue;
+
+    if (Date.now() - entry.timestamp < RECONCILE_MIN_AGE_MS) continue;
+
+    const reason = await fetchRemovalReasonFromModLog(entry.redditId);
+    if (!reason || reason === entry.removalReason) continue;
+
+    const patched = await patchReasonForEntry(entryId, reason, true);
+    if (patched) updated += 1;
+  }
+
+  console.log(`[ModStat] Reconciled ${updated} pending removal reason(s)`);
 }
 
 // ── Helper: sync Reddit filter removals from mod log ──
@@ -375,14 +634,8 @@ async function syncRedditFilterRemovals(): Promise<void> {
     let synced = 0;
 
     for (const action of actions) {
-      // Try every known field variation for the post id
-      const contentId = String(
-        (action as any).targetPost?.id ??
-          (action as any).target?.id ??
-          (action as any).targetId ??
-          ''
-      );
-      if (!contentId) continue;
+      const contentId = action.target?.id ?? '';
+      if (!contentId.startsWith('t3_')) continue;
 
       // Already tracked — skip
       const existing = await getEntryIdByRedditId(contentId);
@@ -391,21 +644,10 @@ async function syncRedditFilterRemovals(): Promise<void> {
       // Dedup guard (prefix with 'sync:' to avoid colliding with trigger dedup keys)
       if (await isDuplicate(`sync:${contentId}`)) continue;
 
-      const authorName = String(
-        (action as any).targetPost?.author ??
-          (action as any).target?.author ??
-          (action as any).targetAuthor ??
-          'unknown'
-      );
+      const authorName = String(action.target?.author ?? 'unknown');
       if (isBotAuthor(authorName, context.subredditName ?? '')) continue;
 
-      const title =
-        String(
-          (action as any).targetPost?.title ??
-            (action as any).target?.title ??
-            (action as any).targetTitle ??
-            ''
-        ).trim() || '(no title)';
+      const title = String(action.target?.title ?? '').trim() || '(no title)';
 
       const entry: RemovalEntry = {
         id: makeId(),
@@ -419,7 +661,6 @@ async function syncRedditFilterRemovals(): Promise<void> {
       };
 
       await saveRemoval(entry);
-      await setRedditIdMap(contentId, entry.id);
       synced++;
       console.log(`[ModStat] Synced Reddit filter removal: "${title}"`);
     }
@@ -473,11 +714,11 @@ async function sendWeeklyDigest(): Promise<void> {
   });
 
   const topViolation = Object.entries(stats.byReason)
-    .filter(([r]) => r !== 'No reason given')
+    .filter(([r]) => r !== NO_REASON)
     .sort((a, b) => b[1] - a[1])[0];
 
   const busiestDay = Object.entries(stats.byDay).sort((a, b) => b[1] - a[1])[0];
-  const noReasonCount = stats.byReason['No reason given'] ?? 0;
+  const noReasonCount = stats.byReason[NO_REASON] ?? 0;
 
   const glance = [
     `📊 **${stats.totalRemovals} posts removed** this week${wow(stats.totalRemovals, prevTotal)}`,
@@ -493,7 +734,7 @@ async function sendWeeklyDigest(): Promise<void> {
     .join('  \n');
 
   const ruleLines = Object.entries(stats.byReason)
-    .filter(([r, count]) => r !== 'No reason given' && count > 0)
+    .filter(([r, count]) => r !== NO_REASON && count > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([rule, count]) => {
       const pct = Math.round((count / stats.totalRemovals) * 100);
@@ -516,7 +757,7 @@ async function sendWeeklyDigest(): Promise<void> {
 
   const nudge =
     noReasonCount > 0
-      ? `\n---\n⚠️ ${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} had no reason attached. Adding reasons helps ModStat track rule enforcement accurately.`
+      ? `\n---\n⚠️ ${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} had no removal reason selected. Choosing a saved response (with rule + message) helps ModStat track rule enforcement accurately.`
       : '';
 
   const digestBody = `
@@ -668,7 +909,15 @@ triggers.post('/on-mod-action', async (c) => {
           } else {
             console.log('[ModStat] Extracted reason:', reason);
             await new Promise((resolve) => setTimeout(resolve, 1500));
-            await patchLatestReason(reason, false);
+            const postId =
+              extractPostIdFromBody(body as Record<string, unknown>) ||
+              extractPostIdFromStickyComment(tc);
+            const patched = await patchReasonForPost(postId, reason, false);
+            if (!patched) {
+              console.log(
+                '[ModStat] Sticky: no matching post entry for reason'
+              );
+            }
           }
         }
       }
@@ -705,10 +954,22 @@ triggers.post('/on-mod-action', async (c) => {
         console.log(
           `[ModStat] addremovalreason: captured title "${reasonTitle}"`
         );
-        await patchLatestReason(reasonTitle, true);
+        const bodyRecord = body as Record<string, unknown>;
+        let postId = extractPostIdFromBody(bodyRecord);
+        if (!postId) {
+          postId = await resolvePostIdForAddRemovalReason(reasonTitle);
+        }
+        const patched = postId
+          ? await patchReasonForPost(postId, reasonTitle, true)
+          : false;
+        if (!patched) {
+          console.log(
+            '[ModStat] addremovalreason: no matching entry — reconcile job will retry'
+          );
+        }
       } else {
         console.log(
-          '[ModStat] addremovalreason: no title in payload — sticky path handles resolution'
+          '[ModStat] addremovalreason: no title in payload — reconcile via mod log'
         );
       }
 
@@ -810,8 +1071,11 @@ triggers.post('/on-mod-action', async (c) => {
     }
 
     // ── Determine removal reason ─────────────
-    let removalReason = 'No reason given';
-    if (modName.toLowerCase() === 'automoderator') {
+    let removalReason = NO_REASON;
+    const pendingAutomodReason = await consumePendingAutomodReason(contentId);
+    if (pendingAutomodReason) {
+      removalReason = pendingAutomodReason;
+    } else if (modName.toLowerCase() === 'automoderator') {
       removalReason = REASON_AUTOMOD_PENDING;
     } else if (modName.toLowerCase() === 'reddit') {
       removalReason = REASON_REDDIT_FILTER;
@@ -841,11 +1105,6 @@ triggers.post('/on-mod-action', async (c) => {
       contentId
     );
 
-    if (isAutomatedMod(modName) && contentId) {
-      await setRedditIdMap(contentId, entry.id);
-      console.log(`[ModStat] RedditId mapped: ${contentId} → ${entry.id}`);
-    }
-
     return c.json<TriggerResponse>(
       { status: 'success', message: 'Logged post removal' },
       200
@@ -854,6 +1113,42 @@ triggers.post('/on-mod-action', async (c) => {
     console.error('[ModStat] ModAction error:', error);
     return c.json<TriggerResponse>(
       { status: 'error', message: 'Failed to process mod action' },
+      400
+    );
+  }
+});
+
+// ── AUTOMODERATOR FILTER POST ──────────────
+triggers.post('/on-automoderator-filter-post', async (c) => {
+  try {
+    const body = await c.req.json();
+    const rawPost = body?.post as Record<string, unknown> | undefined;
+    const postId = extractPostIdFromRecord(rawPost);
+    const reason = String(body?.reason ?? '').trim();
+
+    if (!postId) {
+      return c.json<TriggerResponse>(
+        { status: 'success', message: 'No post in automod filter event' },
+        200
+      );
+    }
+
+    if (reason) {
+      await storePendingAutomodReason(postId, reason);
+      const patched = await patchReasonForPost(postId, reason, true);
+      console.log(
+        `[ModStat] Automod filter post ${postId} | reason:"${reason}" | patched:${patched}`
+      );
+    }
+
+    return c.json<TriggerResponse>(
+      { status: 'success', message: 'Automod filter post handled' },
+      200
+    );
+  } catch (error) {
+    console.error('[ModStat] AutomoderatorFilterPost error:', error);
+    return c.json<TriggerResponse>(
+      { status: 'error', message: 'Automod filter handler failed' },
       400
     );
   }
@@ -877,8 +1172,9 @@ triggers.post('/on-scheduler', async (c) => {
     if (jobName === 'sync-reddit-filter') {
       console.log('[ModStat] Running Reddit filter sync...');
       await syncRedditFilterRemovals();
+      await reconcilePendingRemovalReasons();
       return c.json<TriggerResponse>(
-        { status: 'success', message: 'Reddit filter sync complete' },
+        { status: 'success', message: 'Reddit filter sync and reconcile complete' },
         200
       );
     }

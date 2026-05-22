@@ -1,5 +1,6 @@
 import { StrictMode, useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
+import { REMOVAL_REASON_NONE } from '../shared/api';
 
 async function apiFetch(path, options = {}) {
   const response = await fetch(`/api${path}`, {
@@ -474,7 +475,7 @@ const RemovalRow = ({ entry, dark }) => {
         : mins < 1440
           ? `${Math.floor(mins / 60)}h ago`
           : `${Math.floor(mins / 1440)}d ago`;
-  const isNoReason = entry.removalReason === 'No reason given';
+  const isNoReason = entry.removalReason === REMOVAL_REASON_NONE;
   return (
     <div
       style={{
@@ -963,11 +964,11 @@ export const App = () => {
     : null;
   const topReason = stats
     ? Object.entries(stats.byReason)
-        .filter(([r]) => r !== 'No reason given')
+        .filter(([r]) => r !== REMOVAL_REASON_NONE)
         .sort((a, b) => b[1] - a[1])[0]
     : null;
   const ruleKeys = stats
-    ? Object.keys(stats.byReason).filter((r) => r !== 'No reason given')
+    ? Object.keys(stats.byReason).filter((r) => r !== REMOVAL_REASON_NONE)
     : [];
   const reasonColorMap = stats
     ? Object.fromEntries(Object.keys(stats.byReason).map((key, i) => [key, i]))

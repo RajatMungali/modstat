@@ -11,6 +11,7 @@ import type {
   RemovalEntry,
   ErrorResponse,
 } from '../../shared/api';
+import { REMOVAL_REASON_NONE } from '../../shared/api';
 
 export const api = new Hono();
 
@@ -265,10 +266,10 @@ api.post('/generate-digest', async (c) => {
     )[0];
 
     const topViolation = Object.entries(stats.byReason)
-      .filter(([r]) => r !== 'No reason given')
+      .filter(([r]) => r !== REMOVAL_REASON_NONE)
       .sort((a, b) => b[1] - a[1])[0];
 
-    const noReasonCount = stats.byReason['No reason given'] ?? 0;
+    const noReasonCount = stats.byReason[REMOVAL_REASON_NONE] ?? 0;
 
     // ── Section: glance ──────────────────────────
     const glance = [
@@ -286,7 +287,7 @@ api.post('/generate-digest', async (c) => {
 
     // ── Section: rules breakdown ─────────────────
     const ruleLines = Object.entries(stats.byReason)
-      .filter(([r, count]) => r !== 'No reason given' && count > 0)
+      .filter(([r, count]) => r !== REMOVAL_REASON_NONE && count > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([rule, count]) => {
         const pct = Math.round((count / stats.totalRemovals) * 100);
@@ -313,7 +314,7 @@ api.post('/generate-digest', async (c) => {
     // ── No-reason nudge ──────────────────────────
     const nudge =
       noReasonCount > 0
-        ? `\n---\n⚠️ ${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} had no reason attached. Adding reasons helps ModStat track rule enforcement accurately.`
+        ? `\n---\n⚠️ ${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} had no removal reason selected. Choosing a saved response (with rule + message) helps ModStat track rule enforcement accurately.`
         : '';
 
     // ── Assemble digest body ─────────────────────

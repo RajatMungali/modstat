@@ -1,27 +1,29 @@
-## Devvit React Starter
+# ModStat
 
-A starter to build web applications on Reddit's developer platform
+ModStat is a Dev Platform app that helps Reddit moderators track removed posts, identify the most enforced rules, detect repeat offenders, and generate automatic weekly moderation reports.
 
-- [Devvit](https://developers.reddit.com/): A way to build and deploy immersive games on Reddit
-- [Vite](https://vite.dev/): For compiling the webView
-- [React](https://react.dev/): For UI
-- [Hono](https://hono.dev/): For backend logic
-- [Tailwind](https://tailwindcss.com/): For styles
-- [TypeScript](https://www.typescriptlang.org/): For type safety
+Once installed, ModStat automatically listens for moderator removal actions in your subreddit and stores analytics like removal reasons, moderator activity, daily trends, and repeat offenders — all inside a clean moderation dashboard.
 
-## Getting Started
+## Features
 
-> Make sure you have Node 22 downloaded on your machine before running!
+- Most cited rule tracking
+- Repeat offender detection
+- Moderator activity analytics
+- Daily removal trends
+- Recent moderation feed
+- Moderator-only dashboard
+- Automatic Weekly Reports
 
-1. Run `npm create devvit@latest --template=react`
-2. Go through the installation wizard. You will need to create a Reddit account and connect it to Reddit developers
-3. Copy the command on the success page into your terminal
+## Zero Set-Up
 
-## Commands
+Every Monday, ModStat automatically sends a private weekly moderation report to Mod Discussions via Modmail.
 
-- `npm run dev`: Starts a development server where you can develop your application live on Reddit.
-- `npm run build`: Builds your client and server projects
-- `npm run deploy`: Uploads a new version of your app
-- `npm run launch`: Publishes your app for review
-- `npm run login`: Logs your CLI into Reddit
-- `npm run type-check`: Type checks, lints, and prettifies your app
+## Reports include:
+
+- Total removals
+- Top rule violations
+- Moderator activity
+- Repeat offenders
+- Weekly moderation trends
+
+Install once and ModStat handles the rest automatically.

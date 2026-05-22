@@ -14,18 +14,32 @@ import type {
 
 export const api = new Hono();
 
+// ── Helper: check moderator ─────────────────
+async function checkModerator(): Promise<boolean> {
+  try {
+    const currentUser = await reddit.getCurrentUser();
+
+    if (!currentUser) return false;
+
+    const subreddit = await reddit.getCurrentSubreddit();
+    const moderators = await subreddit.getModerators();
+
+    return (await moderators.all()).some((mod) => mod.id === currentUser.id);
+  } catch {
+    return false;
+  }
+}
+
 // ── Helper: get current week key ───────────
 function getWeekKey(): string {
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
-
   const weekNum = Math.ceil(
     ((now.getTime() - startOfYear.getTime()) / 86400000 +
       startOfYear.getDay() +
       1) /
       7
   );
-
   return `week:${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 }
 
@@ -34,14 +48,12 @@ function getPrevWeekKey(): string {
   const now = new Date();
   now.setDate(now.getDate() - 7);
   const startOfYear = new Date(now.getFullYear(), 0, 1);
-
   const weekNum = Math.ceil(
     ((now.getTime() - startOfYear.getTime()) / 86400000 +
       startOfYear.getDay() +
       1) /
       7
   );
-
   return `week:${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 }
 
@@ -66,7 +78,6 @@ async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
   const modKeys = [...new Set(await listGet(`${weekKey}:modKeys`))];
   const offenderKeys = [...new Set(await listGet(`${weekKey}:offenderKeys`))];
 
-  // Build reason counts
   const byReason: Record<string, number> = {};
   for (const reason of reasonKeys) {
     const val = await redis
@@ -75,21 +86,18 @@ async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
     byReason[reason] = val ? parseInt(val) : 0;
   }
 
-  // Build mod counts
   const byMod: Record<string, number> = {};
   for (const mod of modKeys) {
     const val = await redis.get(`${weekKey}:mod:${mod}`).catch(() => null);
     byMod[mod] = val ? parseInt(val) : 0;
   }
 
-  // Build day counts
   const byDay: Record<string, number> = {};
   for (const day of days) {
     const val = await redis.get(`${weekKey}:day:${day}`).catch(() => null);
     byDay[day] = val ? parseInt(val) : 0;
   }
 
-  // Build offender list
   const offenderList: Array<{ username: string; count: number }> = [];
   for (const username of offenderKeys) {
     const val = await redis
@@ -101,18 +109,19 @@ async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
 
   const totalRemovals = Object.values(byReason).reduce((a, b) => a + b, 0);
 
-  // ── Posts vs Comments breakdown ─────────────
   const removalIds = await listGet(`${weekKey}:list`);
   let postCount = 0;
-  let commentCount = 0;
 
   for (const id of removalIds) {
     const raw = await redis.get(`removal:${id}`).catch(() => null);
+
     if (raw) {
       try {
         const entry = JSON.parse(raw) as RemovalEntry;
-        if (entry.contentType === 'comment') commentCount++;
-        else postCount++;
+
+        if (entry.contentType === 'post') {
+          postCount++;
+        }
       } catch {}
     }
   }
@@ -133,11 +142,10 @@ async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
     byReason,
     byMod,
     byDay,
-    topOffenders: offenderList.slice(0, 5),
+    topOffenders: offenderList.slice(0, 10),
     weekStart: weekStart.getTime(),
     weekEnd: weekEnd.getTime(),
     postCount,
-    commentCount,
   };
 }
 
@@ -154,6 +162,8 @@ api.get('/init', async (c) => {
 
   try {
     const username = await reddit.getCurrentUsername();
+    const isMod = await checkModerator();
+
     const weekKey = getWeekKey();
     const stats = await buildWeeklyStats(weekKey);
 
@@ -162,6 +172,7 @@ api.get('/init', async (c) => {
 
     for (const id of ids.slice(0, 20)) {
       const raw = await redis.get(`removal:${id}`).catch(() => null);
+
       if (raw) {
         try {
           recentRemovals.push(JSON.parse(raw) as RemovalEntry);
@@ -173,12 +184,13 @@ api.get('/init', async (c) => {
       type: 'init',
       postId,
       username: username ?? 'unknown',
-      isMod: true,
+      isMod,
       stats,
       recentRemovals,
     });
   } catch (error) {
     console.error('[ModStat] Init error:', error);
+
     return c.json<ErrorResponse>(
       { status: 'error', message: 'Failed to load stats' },
       400
@@ -187,10 +199,21 @@ api.get('/init', async (c) => {
 });
 
 // ── POST /generate-digest ──────────────────
-// ── POST /generate-digest ──────────────────
-// ── POST /generate-digest ──────────────────
 api.post('/generate-digest', async (c) => {
   try {
+    const isMod = await checkModerator();
+
+    if (!isMod) {
+      return c.json(
+        {
+          type: 'digest',
+          success: false,
+          message: 'Moderator access required',
+        },
+        403
+      );
+    }
+
     const weekKey = getWeekKey();
     const prevWeekKey = getPrevWeekKey();
 
@@ -247,10 +270,9 @@ api.post('/generate-digest', async (c) => {
 
     const noReasonCount = stats.byReason['No reason given'] ?? 0;
 
-    // ── Section: glance (two spaces before \n = Reddit line break) ──
+    // ── Section: glance ──────────────────────────
     const glance = [
-      `📊 **${stats.totalRemovals} removals** this week${wow(stats.totalRemovals, prevTotal)}`,
-      `📄 ${stats.postCount} posts removed · 💬 ${stats.commentCount} comments removed`,
+      `📊 **${stats.totalRemovals} posts removed** this week${wow(stats.totalRemovals, prevTotal)}`,
       topViolation
         ? `🚨 Top violation: **${topViolation[0]}** — ${topViolation[1]} (${Math.round((topViolation[1] / stats.totalRemovals) * 100)}%)`
         : '',
@@ -260,7 +282,7 @@ api.post('/generate-digest', async (c) => {
       `👤 Repeat offenders flagged: **${stats.topOffenders.filter((o) => o.count >= 2).length}**`,
     ]
       .filter(Boolean)
-      .join('  \n'); // two spaces before \n = Reddit forced line break
+      .join('  \n');
 
     // ── Section: rules breakdown ─────────────────
     const ruleLines = Object.entries(stats.byReason)
@@ -288,58 +310,58 @@ api.post('/generate-digest', async (c) => {
         .map(([mod, count]) => `- u/${mod}: ${count} actions`)
         .join('\n') || 'No activity recorded.';
 
-    // ── No-reason nudge (only shown if needed) ───
+    // ── No-reason nudge ──────────────────────────
     const nudge =
       noReasonCount > 0
         ? `\n---\n⚠️ ${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} had no reason attached. Adding reasons helps ModStat track rule enforcement accurately.`
         : '';
 
-    // ── Assemble — NO bold title line in body ────
-    // Post title already shows "ModStat Weekly Report", no need to repeat it.
-    const digestText = `
+    // ── Assemble digest body ─────────────────────
+    const digestBody = `
 ${glance}
-
+ 
 ---
-
+ 
 **⚖️ Rules Breakdown**
-
+ 
 ${ruleLines || 'No rule data yet.'}
-
+ 
 ---
-
+ 
 **👤 Repeat Offenders**
-
+ 
 ${offenderLines}
-
+ 
 ---
-
+ 
 **👮 Mod Team Activity**
-
+ 
 ${modLines}
 ${nudge}
-
+ 
 ---
-
+ 
 *Generated by ModStat · r/${context.subredditName ?? ''}*
 `.trim();
 
-    // ── Post to subreddit ────────────────────────
-    const post = await reddit.submitPost({
-      subredditName: context.subredditName ?? '',
-      title: `[ModStat] Weekly Mod Report — ${weekStart} to ${weekEnd}`,
-      text: digestText,
-    });
+    const subject = `[ModStat] Weekly Mod Report — ${weekStart} to ${weekEnd}`;
 
-    try {
-      await reddit.distinguish(post.id, true);
-    } catch {
-      // distinguish may fail in playtest — non-fatal
-    }
+    const conversationId = await reddit.modMail.createModDiscussionConversation(
+      {
+        subject,
+        bodyMarkdown: digestBody,
+        subredditId: context.subredditId,
+      }
+    );
+
+    const modmailUrl = `https://mod.reddit.com/mail/perma/${conversationId}`;
 
     return c.json<DigestResponse>({
       type: 'digest',
       success: true,
-      message: `Digest posted: ${post.url}`,
+      message: `Digest posted to Mod Discussions.`,
+      conversationId,
+      modmailUrl,
     });
   } catch (error) {
     console.error('[ModStat] Digest error:', error);
@@ -348,5 +370,67 @@ ${nudge}
       success: false,
       message: 'Failed to generate digest',
     });
+  }
+});
+
+// ── POST /reset-week ───────────────────────
+api.post('/reset-week', async (c) => {
+  try {
+    const isMod = await checkModerator();
+
+    if (!isMod) {
+      return c.json(
+        {
+          status: 'error',
+          message: 'Moderator access required',
+        },
+        403
+      );
+    }
+
+    const weekKey = getWeekKey();
+    const days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+
+    const reasonKeys = [...new Set(await listGet(`${weekKey}:reasonKeys`))];
+    for (const reason of reasonKeys) {
+      await redis.del(`${weekKey}:reason:${reason}`).catch(() => null);
+    }
+
+    const modKeys = [...new Set(await listGet(`${weekKey}:modKeys`))];
+    for (const mod of modKeys) {
+      await redis.del(`${weekKey}:mod:${mod}`).catch(() => null);
+    }
+
+    for (const day of days) {
+      await redis.del(`${weekKey}:day:${day}`).catch(() => null);
+    }
+
+    const offenderKeys = [...new Set(await listGet(`${weekKey}:offenderKeys`))];
+    for (const username of offenderKeys) {
+      await redis.del(`${weekKey}:offender:${username}`).catch(() => null);
+    }
+
+    const removalIds = await listGet(`${weekKey}:list`);
+    for (const id of removalIds) {
+      await redis.del(`removal:${id}`).catch(() => null);
+    }
+
+    await redis.del(`${weekKey}:reasonKeys`).catch(() => null);
+    await redis.del(`${weekKey}:modKeys`).catch(() => null);
+    await redis.del(`${weekKey}:offenderKeys`).catch(() => null);
+    await redis.del(`${weekKey}:list`).catch(() => null);
+
+    return c.json({ status: 'success', message: 'Week cleared.' });
+  } catch (error) {
+    console.error('[ModStat] Reset error:', error);
+    return c.json({ status: 'error', message: 'Failed to clear week.' }, 500);
   }
 });

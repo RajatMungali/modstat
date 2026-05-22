@@ -4,195 +4,367 @@ import { navigateTo, context, requestExpandedMode } from '@devvit/web/client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-const IconChart = ({ className = 'h-6 w-6' }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    aria-hidden="true"
-  >
-    <path d="M3 3v18h18" />
-    <path d="M7 14v4" />
-    <path d="M12 10v8" />
-    <path d="M17 6v12" />
-    <path d="M6 8l4-3 4 2 5-4" />
-  </svg>
-);
-
-const IconClock = ({ className = 'h-6 w-6' }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-);
-
-const IconShield = ({ className = 'h-6 w-6' }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    aria-hidden="true"
-  >
-    <path d="M12 3l7 3v5c0 5-3.5 9.2-7 10-3.5-.8-7-5-7-10V6l7-3z" />
-    <path d="M9.5 12l1.8 1.8 3.7-3.8" />
-  </svg>
-);
-
-const IconArrow = ({ className = 'h-5 w-5' }: { className?: string }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    aria-hidden="true"
-  >
-    <path d="M5 12h14" />
-    <path d="M13 5l7 7-7 7" />
-  </svg>
-);
+const features = [
+  {
+    icon: 'ti-chart-bar',
+    title: 'Weekly Analytics',
+    description: 'Track removal reasons and moderation trends over time.',
+  },
+  {
+    icon: 'ti-robot',
+    title: 'Fully Automatic',
+    description: 'Runs silently 24/7 with no intervention needed.',
+  },
+  {
+    icon: 'ti-bolt',
+    title: 'Zero Effort',
+    description: 'Install once and receive weekly reports in your inbox.',
+  },
+];
 
 const Splash = () => {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-orange-50 px-6 py-8 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background:
+          'radial-gradient(ellipse at 50% 0%, #3a1a0a 0%, #1a0a00 40%, #0f0f0f 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+        overflow: 'hidden',
+        padding: '24px 20px',
+        boxSizing: 'border-box',
+      }}
+    >
       {/* Background glow */}
-      <div className="absolute inset-0">
-        <div className="absolute left-1/2 top-24 h-80 w-80 -translate-x-1/2 rounded-full bg-orange-500/15 blur-3xl" />
-        <div className="absolute bottom-10 right-10 h-64 w-64 rounded-full bg-orange-400/10 blur-3xl" />
+      <div
+        style={{
+          position: 'absolute',
+          top: '-60px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '400px',
+          height: '300px',
+          background:
+            'radial-gradient(ellipse, rgba(249,115,22,0.18) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* Logo icon centered */}
+      <div
+        style={{
+          width: '56px',
+          height: '56px',
+          borderRadius: '16px',
+          background: 'linear-gradient(135deg, #f97316, #ef4444)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 0 32px rgba(249,115,22,0.45)',
+          marginBottom: '12px',
+        }}
+      >
+        <i
+          className="ti ti-chart-bar"
+          style={{ fontSize: '26px', color: '#fff' }}
+          aria-hidden="true"
+        />
       </div>
 
-      {/* Main card */}
-      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center justify-center">
-        <div className="w-full rounded-[32px] border border-slate-200/70 bg-white/90 p-8 shadow-[0_25px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90 sm:p-12">
-          {/* Header */}
-          <div className="text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-orange-500 to-red-500 shadow-[0_20px_40px_rgba(249,115,22,0.35)]">
-              <IconChart className="h-10 w-10 text-white" />
+      {/* Wordmark */}
+      <h1
+        style={{
+          margin: '0 0 4px',
+          fontSize: '2.4rem',
+          fontWeight: 800,
+          letterSpacing: '-0.04em',
+          lineHeight: 1,
+          color: '#fff',
+        }}
+      >
+        Mod
+        <span
+          style={{
+            background: 'linear-gradient(90deg, #f97316, #ef4444)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}
+        >
+          Stat
+        </span>
+      </h1>
+
+      {/* Subtitle label */}
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: '9px',
+          fontWeight: 600,
+          letterSpacing: '0.22em',
+          textTransform: 'uppercase',
+          color: 'rgba(255,255,255,0.3)',
+        }}
+      >
+        Reddit Analytics &amp; Trends
+      </p>
+
+      {/* Welcome */}
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: '13px',
+          color: 'rgba(255,255,255,0.45)',
+        }}
+      >
+        Welcome back,{' '}
+        <span style={{ color: '#f97316', fontWeight: 600 }}>
+          {context.username ?? 'Moderator'}
+        </span>
+      </p>
+
+      {/* Heading */}
+      <h2
+        style={{
+          margin: '0 0 8px',
+          fontSize: '1.35rem',
+          fontWeight: 800,
+          color: '#fff',
+          textAlign: 'center',
+          lineHeight: 1.3,
+          maxWidth: '340px',
+        }}
+      >
+        Get private weekly insights into your moderation trends.
+      </h2>
+
+      {/* Description */}
+      <p
+        style={{
+          margin: '0 0 20px',
+          fontSize: '13px',
+          color: 'rgba(255,255,255,0.45)',
+          textAlign: 'center',
+          maxWidth: '320px',
+          lineHeight: 1.5,
+        }}
+      >
+        Track removals, repeat offenders, and rule patterns automatically
+        delivered to your inbox.
+      </p>
+
+      {/* Feature list */}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '380px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          marginBottom: '20px',
+        }}
+      >
+        {features.map(({ icon, title, description }) => (
+          <div
+            key={title}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              background: 'rgba(255,255,255,0.05)',
+              border: '0.5px solid rgba(255,255,255,0.09)',
+            }}
+          >
+            <div
+              style={{
+                flexShrink: 0,
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                background: 'rgba(249,115,22,0.15)',
+                border: '0.5px solid rgba(249,115,22,0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <i
+                className={`ti ${icon}`}
+                style={{ fontSize: '17px', color: '#f97316' }}
+                aria-hidden="true"
+              />
             </div>
-
-            <h1 className="text-5xl font-black tracking-tight sm:text-6xl">
-              <span className="text-slate-900 dark:text-white">mod</span>
-              <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
-                stat
-              </span>
-            </h1>
-
-            <p className="mt-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
-              Reddit Analytics & Trends
-            </p>
-
-            <p className="mt-6 text-sm text-slate-500 dark:text-slate-400">
-              Welcome back,
-              <span className="ml-1 font-semibold text-slate-800 dark:text-white">
-                {context.username ?? 'Moderator'}
-              </span>
-            </p>
-
-            <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-slate-600 dark:text-slate-300 sm:text-lg">
-              Automatically track removal reasons, repeat offenders, and rule
-              trends in your subreddit. Install once and receive a private
-              weekly moderation digest with zero effort.
-            </p>
-          </div>
-
-          {/* Feature cards */}
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {[
-              {
-                title: 'Weekly Analytics',
-                Icon: IconChart,
-                description: 'Track removal reasons and moderation trends.',
-              },
-              {
-                title: 'Fully Automatic',
-                Icon: IconClock,
-                description: 'Runs in the background 24/7.',
-              },
-              {
-                title: 'Zero Effort',
-                Icon: IconShield,
-                description: 'Install once and get weekly reports.',
-              },
-            ].map(({ title, Icon, description }) => (
-              <div
-                key={title}
-                className="group rounded-3xl border border-slate-200/70 bg-slate-50/80 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:border-slate-700/50 dark:bg-slate-800/50"
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: 'rgba(255,255,255,0.9)',
+                }}
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400">
-                  <Icon className="h-6 w-6" />
-                </div>
-
-                <h3 className="mt-4 text-sm font-semibold text-slate-900 dark:text-white">
-                  {title}
-                </h3>
-
-                <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                  {description}
-                </p>
-              </div>
-            ))}
+                {title}
+              </p>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '11.5px',
+                  color: 'rgba(255,255,255,0.4)',
+                  lineHeight: 1.4,
+                }}
+              >
+                {description}
+              </p>
+            </div>
+            <i
+              className="ti ti-chevron-right"
+              style={{
+                fontSize: '15px',
+                color: 'rgba(255,255,255,0.25)',
+                flexShrink: 0,
+              }}
+              aria-hidden="true"
+            />
           </div>
+        ))}
+      </div>
 
-          {/* CTA */}
-          <div className="mt-12 flex justify-center">
+      {/* CTA */}
+      <button
+        onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          padding: '13px 0',
+          width: '100%',
+          maxWidth: '380px',
+          borderRadius: '100px',
+          border: 'none',
+          background: 'linear-gradient(135deg, #f97316, #ef4444)',
+          color: '#fff',
+          fontSize: '14px',
+          fontWeight: 700,
+          cursor: 'pointer',
+          boxShadow: '0 8px 28px rgba(249,115,22,0.45)',
+          marginBottom: '14px',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.opacity = '0.88';
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.opacity = '1';
+        }}
+      >
+        <i
+          className="ti ti-rocket"
+          style={{ fontSize: '16px' }}
+          aria-hidden="true"
+        />
+        Launch Dashboard
+        <i
+          className="ti ti-chevron-right"
+          style={{ fontSize: '15px' }}
+          aria-hidden="true"
+        />
+      </button>
+
+      {/* Trust line */}
+      <p
+        style={{
+          margin: '0 0 10px',
+          fontSize: '12px',
+          color: 'rgba(255,255,255,0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '5px',
+        }}
+      >
+        <i
+          className="ti ti-shield-check"
+          style={{ fontSize: '13px', color: 'rgba(249,115,22,0.5)' }}
+          aria-hidden="true"
+        />
+        Trusted by moderators across hundreds of communities.
+      </p>
+
+      {/* Footer links */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+        }}
+      >
+        {[
+          {
+            label: 'Docs',
+            url: 'https://developers.reddit.com/docs',
+            icon: 'ti-file-text',
+          },
+          {
+            label: 'Community',
+            url: 'https://www.reddit.com/r/Devvit',
+            icon: 'ti-users',
+          },
+          {
+            label: 'Support',
+            url: 'https://discord.com/invite/R7yu2wh9Qz',
+            icon: 'ti-headset',
+          },
+        ].map(({ label, url, icon }, i, arr) => (
+          <span
+            key={label}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
             <button
-              onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-              className="group inline-flex items-center gap-3 rounded-full bg-gradient-to-r from-orange-500 to-red-500 px-8 py-4 text-sm font-semibold text-white shadow-[0_20px_40px_rgba(249,115,22,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_25px_50px_rgba(249,115,22,0.45)]"
+              onClick={() => navigateTo(url)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 8px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '11px',
+                color: 'rgba(255,255,255,0.3)',
+                borderRadius: '6px',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  'rgba(255,255,255,0.65)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color =
+                  'rgba(255,255,255,0.3)';
+              }}
             >
-              Launch Dashboard
-              <IconArrow className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
+              <i
+                className={`ti ${icon}`}
+                style={{ fontSize: '12px' }}
+                aria-hidden="true"
+              />
+              {label}
             </button>
-          </div>
-
-          {/* Footer */}
-          <footer className="mt-10 flex flex-wrap items-center justify-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-            <button
-              className="transition-colors hover:text-slate-900 dark:hover:text-white"
-              onClick={() => navigateTo('https://developers.reddit.com/docs')}
-            >
-              Documentation
-            </button>
-
-            <span className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-
-            <button
-              className="transition-colors hover:text-slate-900 dark:hover:text-white"
-              onClick={() => navigateTo('https://www.reddit.com/r/Devvit')}
-            >
-              Devvit Community
-            </button>
-
-            <span className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-
-            <button
-              className="transition-colors hover:text-slate-900 dark:hover:text-white"
-              onClick={() =>
-                navigateTo('https://discord.com/invite/R7yu2wh9Qz')
-              }
-            >
-              Support
-            </button>
-          </footer>
-        </div>
+            {i < arr.length - 1 && (
+              <span
+                style={{ fontSize: '13px', color: 'rgba(255,255,255,0.2)' }}
+              >
+                •
+              </span>
+            )}
+          </span>
+        ))}
       </div>
     </div>
   );

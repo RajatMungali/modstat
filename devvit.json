@@ -40,6 +40,13 @@
     "onAppInstall": "/internal/triggers/on-app-install",
     "onModAction": "/internal/triggers/on-mod-action"
   },
+  "scheduler": {
+    "tasks": {
+      "weekly-digest": {
+        "endpoint": "/internal/triggers/on-scheduler"
+      }
+    }
+  },
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build"

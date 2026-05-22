@@ -4,8 +4,8 @@
 
 export type RemovalEntry = {
   id: string;
-  redditId: string; // t3_xxx (post) or t1_xxx (comment) — used for dedup
-  contentType: 'post' | 'comment';
+  redditId: string;
+  contentType: 'post';
   title: string;
   authorName: string;
   modName: string;
@@ -22,7 +22,6 @@ export type WeeklyStats = {
   weekStart: number;
   weekEnd: number;
   postCount: number;
-  commentCount: number;
 };
 
 export type InitResponse = {
@@ -38,6 +37,8 @@ export type DigestResponse = {
   type: 'digest';
   success: boolean;
   message: string;
+  conversationId?: string;
+  modmailUrl?: string;
 };
 
 export type ErrorResponse = {

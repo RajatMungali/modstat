@@ -1,14 +1,19 @@
-import './index.css';
 import { StrictMode, useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { InitResponse, WeeklyStats, RemovalEntry } from '../shared/api';
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
+async function apiFetch(path, options = {}) {
+  const response = await fetch(`/api${path}`, {
+    method: options.method ?? 'GET',
+    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+    body: options.body,
   });
-  return res.json() as Promise<T>;
+  if (!response.ok) {
+    const err = await response
+      .json()
+      .catch(() => ({ message: response.statusText }));
+    throw new Error(err.message ?? 'Request failed');
+  }
+  return response.json();
 }
 
 const RULE_COLORS = [
@@ -20,10 +25,15 @@ const RULE_COLORS = [
   { bg: 'rgba(234,179,8,0.15)', color: '#eab308', bar: '#eab308' },
 ];
 
-// ── Inline SVG Icons (Lucide-style paths, zero dependencies) ────────────────
-type IconProps = { size?: number; color?: string };
-
-const IcHome = ({ size = 16, color = 'currentColor' }: IconProps) => (
+const Icon = ({
+  d,
+  size = 16,
+  color = 'currentColor',
+  poly,
+  circle,
+  line,
+  rect,
+}) => (
   <svg
     width={size}
     height={size}
@@ -34,382 +44,193 @@ const IcHome = ({ size = 16, color = 'currentColor' }: IconProps) => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
+    {d && <path d={d} />}
+    {poly && poly.map((p, i) => <polyline key={i} points={p} />)}
+    {circle && circle.map((c, i) => <circle key={i} {...c} />)}
+    {line && line.map((l, i) => <line key={i} {...l} />)}
+    {rect && rect.map((r, i) => <rect key={i} {...r} />)}
   </svg>
 );
 
-const IcShield = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
+const IcHome = (p) => (
+  <Icon
+    {...p}
+    d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+    poly={['9 22 9 12 15 12 15 22']}
+  />
 );
-
-const IcClock = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="12 6 12 12 16 14" />
-  </svg>
+const IcShield = (p) => (
+  <Icon {...p} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
 );
-
-const IcTrash = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    <path d="M10 11v6M14 11v6" />
-    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-  </svg>
+const IcClock = (p) => (
+  <Icon
+    {...p}
+    circle={[{ cx: 12, cy: 12, r: 10 }]}
+    poly={['12 6 12 12 16 14']}
+  />
 );
-
-const IcFileText = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="16" y1="13" x2="8" y2="13" />
-    <line x1="16" y1="17" x2="8" y2="17" />
-    <polyline points="10 9 9 9 8 9" />
-  </svg>
+const IcTrash = (p) => (
+  <Icon
+    {...p}
+    poly={['3 6 5 6 21 6']}
+    d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+  />
 );
-
-const IcMessageSquare = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-  </svg>
+const IcFileText = (p) => (
+  <Icon
+    {...p}
+    d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+    poly={['14 2 14 8 20 8']}
+    line={[
+      { x1: 16, y1: 13, x2: 8, y2: 13 },
+      { x1: 16, y1: 17, x2: 8, y2: 17 },
+    ]}
+  />
 );
-
-const IcCalendar = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
+const IcCalendar = (p) => (
+  <Icon
+    {...p}
+    rect={[{ x: 3, y: 4, width: 18, height: 18, rx: 2, ry: 2 }]}
+    line={[
+      { x1: 16, y1: 2, x2: 16, y2: 6 },
+      { x1: 8, y1: 2, x2: 8, y2: 6 },
+      { x1: 3, y1: 10, x2: 21, y2: 10 },
+    ]}
+  />
 );
-
-const IcBarChart2 = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="18" y1="20" x2="18" y2="10" />
-    <line x1="12" y1="20" x2="12" y2="4" />
-    <line x1="6" y1="20" x2="6" y2="14" />
-  </svg>
+const IcBarChart2 = (p) => (
+  <Icon
+    {...p}
+    line={[
+      { x1: 18, y1: 20, x2: 18, y2: 10 },
+      { x1: 12, y1: 20, x2: 12, y2: 4 },
+      { x1: 6, y1: 20, x2: 6, y2: 14 },
+    ]}
+  />
 );
-
-const IcMail = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-    <polyline points="22,6 12,13 2,6" />
-  </svg>
+const IcMail = (p) => (
+  <Icon
+    {...p}
+    d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+    poly={['22,6 12,13 2,6']}
+  />
 );
-
-const IcAlertTriangle = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
+const IcAlertTriangle = (p) => (
+  <Icon
+    {...p}
+    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+    line={[
+      { x1: 12, y1: 9, x2: 12, y2: 13 },
+      { x1: 12, y1: 17, x2: 12.01, y2: 17 },
+    ]}
+  />
 );
-
-const IcTarget = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="6" />
-    <circle cx="12" cy="12" r="2" />
-  </svg>
+const IcTarget = (p) => (
+  <Icon
+    {...p}
+    circle={[
+      { cx: 12, cy: 12, r: 10 },
+      { cx: 12, cy: 12, r: 6 },
+      { cx: 12, cy: 12, r: 2 },
+    ]}
+  />
 );
-
-const IcUser = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
+const IcUser = (p) => (
+  <Icon
+    {...p}
+    d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+    circle={[{ cx: 12, cy: 7, r: 4 }]}
+  />
 );
-
-const IcRefreshCw = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <polyline points="23 4 23 10 17 10" />
-    <polyline points="1 20 1 14 7 14" />
-    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-  </svg>
+const IcRefreshCw = (p) => (
+  <Icon
+    {...p}
+    poly={['23 4 23 10 17 10', '1 20 1 14 7 14']}
+    d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+  />
 );
-
-const IcSun = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="5" />
-    <line x1="12" y1="1" x2="12" y2="3" />
-    <line x1="12" y1="21" x2="12" y2="23" />
-    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-    <line x1="1" y1="12" x2="3" y2="12" />
-    <line x1="21" y1="12" x2="23" y2="12" />
-    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-  </svg>
+const IcSun = (p) => (
+  <Icon
+    {...p}
+    circle={[{ cx: 12, cy: 12, r: 5 }]}
+    line={[
+      { x1: 12, y1: 1, x2: 12, y2: 3 },
+      { x1: 12, y1: 21, x2: 12, y2: 23 },
+      { x1: 4.22, y1: 4.22, x2: 5.64, y2: 5.64 },
+      { x1: 18.36, y1: 18.36, x2: 19.78, y2: 19.78 },
+      { x1: 1, y1: 12, x2: 3, y2: 12 },
+      { x1: 21, y1: 12, x2: 23, y2: 12 },
+      { x1: 4.22, y1: 19.78, x2: 5.64, y2: 18.36 },
+      { x1: 18.36, y1: 5.64, x2: 19.78, y2: 4.22 },
+    ]}
+  />
 );
-
-const IcMoon = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-  </svg>
+const IcMoon = (p) => (
+  <Icon {...p} d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
 );
-
-const IcMoreHorizontal = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="5" cy="12" r="1" fill={color} stroke="none" />
-    <circle cx="12" cy="12" r="1" fill={color} stroke="none" />
-    <circle cx="19" cy="12" r="1" fill={color} stroke="none" />
-  </svg>
+const IcMenu = (p) => (
+  <Icon
+    {...p}
+    line={[
+      { x1: 3, y1: 12, x2: 21, y2: 12 },
+      { x1: 3, y1: 6, x2: 21, y2: 6 },
+      { x1: 3, y1: 18, x2: 21, y2: 18 },
+    ]}
+  />
 );
-
-const IcMenu = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="3" y1="12" x2="21" y2="12" />
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <line x1="3" y1="18" x2="21" y2="18" />
-  </svg>
+const IcClipboardList = (p) => (
+  <Icon
+    {...p}
+    d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0-2-2h-2"
+    rect={[{ x: 9, y: 3, width: 6, height: 4, rx: 2 }]}
+    line={[
+      { x1: 9, y1: 12, x2: 15, y2: 12 },
+      { x1: 9, y1: 16, x2: 13, y2: 16 },
+    ]}
+  />
 );
-
-const IcClipboardList = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
-    <rect x="9" y="3" width="6" height="4" rx="2" />
-    <line x1="9" y1="12" x2="15" y2="12" />
-    <line x1="9" y1="16" x2="13" y2="16" />
-  </svg>
+const IcCheckCircle = (p) => (
+  <Icon
+    {...p}
+    circle={[{ cx: 12, cy: 12, r: 10 }]}
+    poly={['9 12 11 14 15 10']}
+  />
 );
-
-const IcCheckCircle = ({ size = 16, color = 'currentColor' }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={color}
-    strokeWidth="1.75"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <circle cx="12" cy="12" r="10" />
-    <polyline points="9 12 11 14 15 10" />
-  </svg>
+const IcExternalLink = (p) => (
+  <Icon
+    {...p}
+    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+    poly={['12 3 21 3 21 12']}
+    line={[{ x1: 21, y1: 3, x2: 11, y2: 13 }]}
+  />
 );
+const IcCheck = (p) => <Icon {...p} poly={['4 12 9 17 20 6']} />;
 
-// ── Sparkline ───────────────────────────────────────────────────────────────
-const Sparkline = ({ color }: { color: string }) => {
-  const points = [3, 7, 4, 9, 6, 11, 8, 14, 10, 12];
-  const max = Math.max(...points);
-  const w = 64,
-    h = 28;
-  const pts = points
-    .map((v, i) => `${(i / (points.length - 1)) * w},${h - (v / max) * h}`)
-    .join(' ');
-  return (
-    <svg
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      style={{ overflow: 'visible' }}
-    >
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.8"
-      />
-    </svg>
-  );
-};
-
-// ── Bar Chart ───────────────────────────────────────────────────────────────
 const BarChart = ({
   data,
   total,
   accent = '#f97316',
   colorized = false,
   dark,
-}: {
-  data: Record<string, number>;
-  total: number;
-  accent?: string;
-  colorized?: boolean;
-  dark: boolean;
+  showAll = false,
+  colorMap = {},
 }) => {
-  const sorted = Object.entries(data)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-  if (sorted.length === 0)
+  const allSorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  const sorted = showAll ? allSorted : allSorted.slice(0, 6);
+  if (!sorted.length)
     return (
-      <p
-        style={{
-          color: dark ? '#6b7280' : '#9ca3af',
-          fontSize: 12,
-          padding: '8px 0',
-        }}
-      >
+      <p style={{ color: dark ? '#6b7280' : '#9ca3af', fontSize: 12 }}>
         No data yet
       </p>
     );
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {sorted.map(([label, count], i) => {
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {sorted.map(([label, count]) => {
         const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+        const colorIndex =
+          colorized && colorMap[label] !== undefined ? colorMap[label] : 0;
         const barColor = colorized
-          ? RULE_COLORS[i % RULE_COLORS.length].bar
+          ? RULE_COLORS[colorIndex % RULE_COLORS.length].bar
           : accent;
         return (
           <div key={label}>
@@ -418,6 +239,7 @@ const BarChart = ({
                 display: 'flex',
                 justifyContent: 'space-between',
                 marginBottom: 6,
+                alignItems: 'center',
               }}
             >
               <div
@@ -425,18 +247,19 @@ const BarChart = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
-                  maxWidth: '70%',
+                  maxWidth: '65%',
+                  minWidth: 0,
                 }}
               >
                 {colorized && (
                   <span
                     style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
+                      width: 7,
+                      height: 7,
                       borderRadius: '50%',
                       background: barColor,
                       flexShrink: 0,
+                      display: 'inline-block',
                     }}
                   />
                 )}
@@ -458,6 +281,8 @@ const BarChart = ({
                   fontSize: 12,
                   color: dark ? '#9ca3af' : '#6b7280',
                   fontVariantNumeric: 'tabular-nums',
+                  flexShrink: 0,
+                  marginLeft: 8,
                 }}
               >
                 {count} · {pct}%
@@ -465,7 +290,7 @@ const BarChart = ({
             </div>
             <div
               style={{
-                height: 6,
+                height: 5,
                 background: dark
                   ? 'rgba(255,255,255,0.08)'
                   : 'rgba(0,0,0,0.06)',
@@ -490,8 +315,123 @@ const BarChart = ({
   );
 };
 
-// ── Rule Badge ──────────────────────────────────────────────────────────────
-const RuleBadge = ({ label, index }: { label: string; index: number }) => {
+const KpiCard = ({ label, value, accent, icon, dark }) => (
+  <div
+    style={{
+      background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
+      border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}`,
+      borderRadius: 18,
+      padding: '16px 18px',
+      flex: '1 1 0',
+      minWidth: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      backdropFilter: 'blur(16px)',
+      boxShadow: dark
+        ? '0 2px 12px rgba(0,0,0,0.2)'
+        : '0 2px 12px rgba(0,0,0,0.06)',
+    }}
+  >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div
+        style={{
+          fontSize: 30,
+          fontWeight: 800,
+          color: accent,
+          letterSpacing: '-1.5px',
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          fontSize: 10,
+          color: dark ? '#9ca3af' : '#6b7280',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          fontWeight: 700,
+          marginTop: 2,
+        }}
+      >
+        {label}
+      </div>
+    </div>
+    <div
+      style={{
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        background: `${accent}1a`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {icon}
+    </div>
+  </div>
+);
+
+const Card = ({ children, style, dark }) => (
+  <div
+    style={{
+      background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.85)',
+      border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
+      borderRadius: 18,
+      padding: '18px 20px',
+      backdropFilter: 'blur(16px)',
+      boxShadow: dark
+        ? '0 2px 12px rgba(0,0,0,0.2)'
+        : '0 2px 12px rgba(0,0,0,0.05)',
+      ...style,
+    }}
+  >
+    {children}
+  </div>
+);
+
+const SectionTitle = ({ children, dark }) => (
+  <p
+    style={{
+      fontSize: 10,
+      fontWeight: 700,
+      color: dark ? '#6b7280' : '#9ca3af',
+      textTransform: 'uppercase',
+      letterSpacing: '0.1em',
+      marginBottom: 14,
+    }}
+  >
+    {children}
+  </p>
+);
+
+const CardHeader = ({ icon, title, iconBg, dark }) => (
+  <div
+    style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}
+  >
+    <div
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 9,
+        background: iconBg,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {icon}
+    </div>
+    <SectionTitle dark={dark}>{title}</SectionTitle>
+  </div>
+);
+
+const RuleBadge = ({ label, index }) => {
   const c = RULE_COLORS[index % RULE_COLORS.length];
   return (
     <span
@@ -523,180 +463,8 @@ const RuleBadge = ({ label, index }: { label: string; index: number }) => {
   );
 };
 
-// ── KPI Card ────────────────────────────────────────────────────────────────
-const KpiCard = ({
-  label,
-  value,
-  accent,
-  icon,
-  dark,
-}: {
-  label: string;
-  value: string | number;
-  accent: string;
-  icon: React.ReactNode;
-  dark: boolean;
-}) => (
-  <div
-    style={{
-      background: dark ? 'rgba(255,255,255,0.04)' : '#ffffff',
-      border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
-      borderRadius: 16,
-      padding: '16px 18px',
-      flex: 1,
-      minWidth: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 4,
-      boxShadow: dark ? 'none' : '0 1px 4px rgba(0,0,0,0.06)',
-      transition: 'box-shadow 0.2s',
-      cursor: 'default',
-    }}
-    onMouseEnter={(e) => {
-      if (!dark)
-        (e.currentTarget as HTMLElement).style.boxShadow =
-          '0 4px 16px rgba(0,0,0,0.1)';
-    }}
-    onMouseLeave={(e) => {
-      if (!dark)
-        (e.currentTarget as HTMLElement).style.boxShadow =
-          '0 1px 4px rgba(0,0,0,0.06)';
-    }}
-  >
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-      }}
-    >
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          background: `${accent}1a`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {icon}
-      </div>
-      <Sparkline color={accent} />
-    </div>
-    <div
-      style={{
-        fontSize: 28,
-        fontWeight: 800,
-        color: accent,
-        letterSpacing: '-1px',
-        lineHeight: 1,
-        marginTop: 8,
-      }}
-    >
-      {value}
-    </div>
-    <div
-      style={{
-        fontSize: 11,
-        color: dark ? '#9ca3af' : '#6b7280',
-        textTransform: 'uppercase',
-        letterSpacing: '0.07em',
-        fontWeight: 600,
-      }}
-    >
-      {label}
-    </div>
-  </div>
-);
-
-// ── Card ────────────────────────────────────────────────────────────────────
-const Card = ({
-  children,
-  style,
-  dark,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-  dark: boolean;
-}) => (
-  <div
-    style={{
-      background: dark ? 'rgba(255,255,255,0.04)' : '#ffffff',
-      border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
-      borderRadius: 16,
-      padding: '18px 20px',
-      boxShadow: dark ? 'none' : '0 1px 4px rgba(0,0,0,0.06)',
-      ...style,
-    }}
-  >
-    {children}
-  </div>
-);
-
-// ── Section Title ───────────────────────────────────────────────────────────
-const SectionTitle = ({
-  children,
-  dark,
-}: {
-  children: React.ReactNode;
-  dark: boolean;
-}) => (
-  <p
-    style={{
-      fontSize: 11,
-      fontWeight: 700,
-      color: dark ? '#6b7280' : '#9ca3af',
-      textTransform: 'uppercase',
-      letterSpacing: '0.09em',
-      marginBottom: 14,
-    }}
-  >
-    {children}
-  </p>
-);
-
-// ── Card Header ─────────────────────────────────────────────────────────────
-const CardHeader = ({
-  icon,
-  title,
-  iconBg,
-  dark,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  iconBg: string;
-  dark: boolean;
-}) => (
-  <div
-    style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}
-  >
-    <div
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: 9,
-        background: iconBg,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      {icon}
-    </div>
-    <SectionTitle dark={dark}>{title}</SectionTitle>
-  </div>
-);
-
-// ── Removal Row ─────────────────────────────────────────────────────────────
-const RemovalRow = ({
-  entry,
-  dark,
-}: {
-  entry: RemovalEntry;
-  dark: boolean;
-}) => {
+// Posts only — always show post icon
+const RemovalRow = ({ entry, dark }) => {
   const mins = Math.floor((Date.now() - entry.timestamp) / 60000);
   const timeAgo =
     mins < 1
@@ -707,7 +475,6 @@ const RemovalRow = ({
           ? `${Math.floor(mins / 60)}h ago`
           : `${Math.floor(mins / 1440)}d ago`;
   const isNoReason = entry.removalReason === 'No reason given';
-  const isComment = entry.contentType === 'comment';
   return (
     <div
       style={{
@@ -723,20 +490,14 @@ const RemovalRow = ({
           width: 34,
           height: 34,
           borderRadius: 10,
-          background: isComment
-            ? 'rgba(168,85,247,0.12)'
-            : 'rgba(249,115,22,0.12)',
+          background: 'rgba(249,115,22,0.12)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
         }}
       >
-        {isComment ? (
-          <IcMessageSquare size={15} color="#a855f7" />
-        ) : (
-          <IcFileText size={15} color="#f97316" />
-        )}
+        <IcFileText size={15} color="#f97316" />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <p
@@ -769,20 +530,7 @@ const RemovalRow = ({
   );
 };
 
-// ── Nav Item ────────────────────────────────────────────────────────────────
-const NavItem = ({
-  icon,
-  label,
-  active,
-  onClick,
-  dark,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  dark: boolean;
-}) => (
+const NavItem = ({ icon, label, active, onClick, dark }) => (
   <button
     onClick={onClick}
     style={{
@@ -804,16 +552,7 @@ const NavItem = ({
       cursor: 'pointer',
       textAlign: 'left',
       transition: 'all 0.15s',
-    }}
-    onMouseEnter={(e) => {
-      if (!active)
-        (e.currentTarget as HTMLElement).style.background = dark
-          ? 'rgba(255,255,255,0.05)'
-          : 'rgba(0,0,0,0.04)';
-    }}
-    onMouseLeave={(e) => {
-      if (!active)
-        (e.currentTarget as HTMLElement).style.background = 'transparent';
+      fontFamily: 'inherit',
     }}
   >
     {icon}
@@ -832,16 +571,7 @@ const NavItem = ({
   </button>
 );
 
-// ── Confirm Modal ───────────────────────────────────────────────────────────
-const ConfirmModal = ({
-  onConfirm,
-  onCancel,
-  dark,
-}: {
-  onConfirm: () => void;
-  onCancel: () => void;
-  dark: boolean;
-}) => (
+const ConfirmModal = ({ onConfirm, onCancel, dark }) => (
   <div
     style={{
       position: 'fixed',
@@ -921,6 +651,7 @@ const ConfirmModal = ({
             fontSize: 13,
             fontWeight: 600,
             cursor: 'pointer',
+            fontFamily: 'inherit',
           }}
         >
           Cancel
@@ -937,6 +668,7 @@ const ConfirmModal = ({
             fontSize: 13,
             fontWeight: 700,
             cursor: 'pointer',
+            fontFamily: 'inherit',
           }}
         >
           Clear Week
@@ -946,8 +678,7 @@ const ConfirmModal = ({
   </div>
 );
 
-// ── Empty State ─────────────────────────────────────────────────────────────
-const EmptyState = ({ dark }: { dark: boolean }) => (
+const EmptyState = ({ dark }) => (
   <div style={{ textAlign: 'center', padding: '64px 24px' }}>
     <div
       style={{
@@ -971,7 +702,7 @@ const EmptyState = ({ dark }: { dark: boolean }) => (
         marginBottom: 8,
       }}
     >
-      No removals yet this week
+      No posts removed yet this week
     </p>
     <p
       style={{
@@ -982,83 +713,164 @@ const EmptyState = ({ dark }: { dark: boolean }) => (
         margin: '0 auto',
       }}
     >
-      ModStat automatically tracks every post and comment removal. Remove
-      something to see it appear here.
+      ModStat automatically tracks every post removal.
     </p>
-    <div
-      style={{
-        marginTop: 24,
-        background: 'rgba(249,115,22,0.08)',
-        border: '1px solid rgba(249,115,22,0.2)',
-        borderRadius: 14,
-        padding: '12px 16px',
-        fontSize: 12,
-        color: '#fb923c',
-        lineHeight: 1.7,
-        maxWidth: 300,
-        margin: '24px auto 0',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        textAlign: 'left',
-      }}
-    >
-      <div style={{ flexShrink: 0, marginTop: 1 }}>
-        <IcTarget size={13} color="#f97316" />
-      </div>
-      <span>
-        Add removal reasons in mod tools so ModStat can track rule violations
-        accurately.
-      </span>
-    </div>
   </div>
 );
 
-// ── Last Updated ────────────────────────────────────────────────────────────
-const LastUpdated = ({ ts, dark }: { ts: number; dark: boolean }) => {
+const LastUpdated = ({ ts }) => {
   const mins = Math.floor((Date.now() - ts) / 60000);
-  const label =
-    mins < 1 ? 'just now' : mins === 1 ? '1 min ago' : `${mins} mins ago`;
   return (
     <span
-      style={{
-        fontSize: 11,
-        color: dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.35)',
-        fontWeight: 500,
-      }}
+      style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}
     >
-      Updated {label}
+      Updated {mins < 1 ? 'just now' : `${mins}m ago`}
     </span>
   );
 };
 
-// ── Main App ─────────────────────────────────────────────────────────────────
+const DigestSuccessBanner = ({ postUrl, dark, onDismiss }) => (
+  <div
+    style={{
+      background: dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
+      border: '1px solid rgba(16,185,129,0.25)',
+      borderRadius: 14,
+      padding: '14px 16px',
+      marginTop: 12,
+      animation: 'fadeUp 0.3s ease',
+    }}
+  >
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 10,
+        marginBottom: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 8,
+            background: 'rgba(16,185,129,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <IcCheck size={14} color="#10b981" />
+        </div>
+        <div>
+          <p
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#10b981',
+              margin: 0,
+            }}
+          >
+            Sent to Mod Discussions!
+          </p>
+          <p
+            style={{
+              fontSize: 11,
+              color: dark ? '#9ca3af' : '#6b7280',
+              margin: 0,
+              marginTop: 1,
+            }}
+          >
+            Only visible to mods — not public
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={onDismiss}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: dark ? '#6b7280' : '#9ca3af',
+          fontSize: 18,
+          lineHeight: 1,
+          padding: '2px 6px',
+          borderRadius: 6,
+        }}
+      >
+        ×
+      </button>
+    </div>
+    {postUrl ? (
+      <a
+        href={postUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          fontSize: 12,
+          fontWeight: 700,
+          color: '#fff',
+          background: '#10b981',
+          padding: '9px 14px',
+          borderRadius: 10,
+          textDecoration: 'none',
+          width: '100%',
+          boxSizing: 'border-box',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = '#059669')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = '#10b981')}
+      >
+        <IcExternalLink size={12} color="#fff" /> Open in Modmail
+      </a>
+    ) : (
+      <p
+        style={{
+          fontSize: 11,
+          color: dark ? '#9ca3af' : '#6b7280',
+          textAlign: 'center',
+        }}
+      >
+        Sent — check Mod Discussions in modmail.
+      </p>
+    )}
+  </div>
+);
+
 export const App = () => {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [username, setUsername] = useState('');
-  const [stats, setStats] = useState<WeeklyStats | null>(null);
-  const [recentRemovals, setRecentRemovals] = useState<RemovalEntry[]>([]);
-  const [tab, setTab] = useState<'overview' | 'reasons' | 'recent'>('overview');
+  const [stats, setStats] = useState(null);
+  const [recentRemovals, setRecentRemovals] = useState([]);
+  const [tab, setTab] = useState('overview');
   const [digestLoading, setDigestLoading] = useState(false);
-  const [digestMsg, setDigestMsg] = useState('');
+  const [digestResult, setDigestResult] = useState(null);
   const [clearLoading, setClearLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [clearMsg, setClearMsg] = useState('');
-  const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
+  const [lastUpdated, setLastUpdated] = useState(Date.now());
   const [dark, setDark] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAllReasons, setShowAllReasons] = useState(false);
+  const [isMod, setIsMod] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await apiFetch<InitResponse>('/init');
-      if ('status' in data && (data as any).status === 'error') {
-        setError((data as any).message);
+      const data = await apiFetch('/init');
+      if (data.status === 'error') {
+        setError(data.message);
         return;
       }
       setUsername(data.username);
+      setIsMod(data.isMod);
       setStats(data.stats);
       setRecentRemovals(data.recentRemovals);
       setLastUpdated(Date.now());
@@ -1075,16 +887,16 @@ export const App = () => {
 
   const generateDigest = useCallback(async () => {
     setDigestLoading(true);
-    setDigestMsg('');
+    setDigestResult(null);
     try {
-      const res = await apiFetch<{
-        type: string;
-        success: boolean;
-        message: string;
-      }>('/generate-digest', { method: 'POST' });
-      setDigestMsg(res.message);
-    } catch {
-      setDigestMsg('Failed to generate digest');
+      const r = await apiFetch('/generate-digest', { method: 'POST' });
+      if (!r.success) {
+        setDigestResult({ error: r.message ?? 'Failed to post digest' });
+        return;
+      }
+      setDigestResult({ postUrl: r.modmailUrl ?? null, error: null });
+    } catch (e) {
+      setDigestResult({ error: e?.message ?? 'Failed to generate digest' });
     } finally {
       setDigestLoading(false);
     }
@@ -1095,11 +907,8 @@ export const App = () => {
     setClearLoading(true);
     setClearMsg('');
     try {
-      const res = await apiFetch<{ status: string; message: string }>(
-        '/reset-week',
-        { method: 'POST' }
-      );
-      setClearMsg(res.status === 'success' ? 'Week cleared.' : 'Clear failed.');
+      const r = await apiFetch('/reset-week', { method: 'POST' });
+      setClearMsg(r.status === 'success' ? 'Week cleared.' : 'Clear failed.');
       await loadData();
     } catch {
       setClearMsg('Clear failed.');
@@ -1107,7 +916,48 @@ export const App = () => {
       setClearLoading(false);
     }
   }, [loadData]);
+  if (!loading && !isMod) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#0d0d1a',
+          color: '#fff',
+          fontFamily: "'DM Sans', sans-serif",
+          padding: 24,
+          textAlign: 'center',
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 72, marginBottom: 16 }}>🐰</div>
 
+          <h1
+            style={{
+              fontSize: 28,
+              fontWeight: 800,
+              marginBottom: 10,
+            }}
+          >
+            ModStat
+          </h1>
+
+          <p
+            style={{
+              color: '#9ca3af',
+              fontSize: 14,
+              lineHeight: 1.6,
+              maxWidth: 320,
+            }}
+          >
+            This dashboard is only available to subreddit moderators.
+          </p>
+        </div>
+      </div>
+    );
+  }
   const busiestDay = stats
     ? Object.entries(stats.byDay).sort((a, b) => b[1] - a[1])[0]
     : null;
@@ -1119,22 +969,27 @@ export const App = () => {
   const ruleKeys = stats
     ? Object.keys(stats.byReason).filter((r) => r !== 'No reason given')
     : [];
+  const reasonColorMap = stats
+    ? Object.fromEntries(Object.keys(stats.byReason).map((key, i) => [key, i]))
+    : {};
 
-  const bg = dark ? '#0d0d1a' : '#f4f5f7';
-  const sideBg = dark ? '#13131f' : '#ffffff';
-  const borderColor = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   const textPrimary = dark ? '#f9fafb' : '#111827';
   const textMuted = dark ? '#9ca3af' : '#6b7280';
-  const headerBg = dark ? 'rgba(13,13,26,0.95)' : 'rgba(255,255,255,0.95)';
+  const borderColor = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const bgGradient = dark
+    ? 'radial-gradient(ellipse at 20% 0%, rgba(234,88,12,0.18) 0%, transparent 55%), radial-gradient(ellipse at 80% 100%, rgba(168,85,247,0.15) 0%, transparent 55%), radial-gradient(ellipse at 60% 40%, rgba(59,130,246,0.1) 0%, transparent 50%), #0d0d1a'
+    : 'radial-gradient(ellipse at 20% 0%, rgba(234,88,12,0.1) 0%, transparent 55%), radial-gradient(ellipse at 80% 100%, rgba(168,85,247,0.08) 0%, transparent 55%), radial-gradient(ellipse at 60% 40%, rgba(59,130,246,0.06) 0%, transparent 50%), #f0f1f4';
+  const sideBg = dark ? 'rgba(13,13,26,0.97)' : 'rgba(255,255,255,0.97)';
 
   return (
     <div
       style={{
         minHeight: '100vh',
-        background: bg,
+        background: bgGradient,
         color: textPrimary,
         fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
         display: 'flex',
+        position: 'relative',
       }}
     >
       {showConfirm && (
@@ -1146,169 +1001,169 @@ export const App = () => {
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        ::-webkit-scrollbar { width: 4px; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.15); border-radius: 99px; }
+        .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 49; backdrop-filter: blur(2px); }
+        .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 640px) {
+          .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+          .two-col-grid { grid-template-columns: 1fr; gap: 10px; }
+          .header-title { font-size: 17px !important; }
+          .content-pad { padding: 14px 12px 40px !important; }
+        }
+        @media (min-width: 1024px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+        button { font-family: inherit; }
       `}</style>
+
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* Sidebar */}
       <div
         style={{
-          width: sidebarOpen ? 220 : 0,
+          width: 220,
           background: sideBg,
           borderRight: `1px solid ${borderColor}`,
           display: 'flex',
           flexDirection: 'column',
-          padding: sidebarOpen ? '20px 12px' : 0,
+          padding: '20px 12px',
           gap: 4,
           flexShrink: 0,
-          position: 'sticky',
+          position: 'fixed',
           top: 0,
+          left: 0,
           height: '100vh',
           overflowY: 'auto',
-          overflowX: 'hidden',
-          transition: 'width 0.25s, padding 0.25s',
+          zIndex: 50,
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.25s cubic-bezier(0.16,1,0.3,1)',
+          backdropFilter: 'blur(20px)',
         }}
       >
-        {sidebarOpen && (
-          <>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '4px 8px 20px',
-              }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
-                  background: 'linear-gradient(135deg,#ea580c,#f97316)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <IcBarChart2 size={16} color="#fff" />
-              </div>
-              <span
-                style={{
-                  fontWeight: 800,
-                  fontSize: 15,
-                  color: textPrimary,
-                  letterSpacing: '-0.3px',
-                }}
-              >
-                modswift25
-              </span>
-            </div>
-
-            <div
-              style={{
-                padding: '0 8px 8px',
-                fontSize: 10,
-                fontWeight: 700,
-                color: textMuted,
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-              }}
-            >
-              ModStat
-            </div>
-
-            <NavItem
-              icon={
-                <IcHome
-                  size={15}
-                  color={tab === 'overview' ? '#f97316' : textMuted}
-                />
-              }
-              label="Overview"
-              active={tab === 'overview'}
-              onClick={() => setTab('overview')}
-              dark={dark}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '4px 8px 20px',
+          }}
+        >
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: 'linear-gradient(135deg,#ea580c,#f97316)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <IcBarChart2 size={16} color="#fff" />
+          </div>
+          <span
+            style={{
+              fontWeight: 800,
+              fontSize: 15,
+              color: textPrimary,
+              letterSpacing: '-0.3px',
+            }}
+          >
+            modswift25
+          </span>
+        </div>
+        <div
+          style={{
+            padding: '0 8px 8px',
+            fontSize: 10,
+            fontWeight: 700,
+            color: textMuted,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+          }}
+        >
+          ModStat
+        </div>
+        <NavItem
+          icon={
+            <IcHome
+              size={15}
+              color={tab === 'overview' ? '#f97316' : textMuted}
             />
-            <NavItem
-              icon={
-                <IcShield
-                  size={15}
-                  color={tab === 'reasons' ? '#f97316' : textMuted}
-                />
-              }
-              label="Reasons"
-              active={tab === 'reasons'}
-              onClick={() => setTab('reasons')}
-              dark={dark}
+          }
+          label="Overview"
+          active={tab === 'overview'}
+          onClick={() => {
+            setTab('overview');
+            setSidebarOpen(false);
+          }}
+          dark={dark}
+        />
+        <NavItem
+          icon={
+            <IcShield
+              size={15}
+              color={tab === 'reasons' ? '#f97316' : textMuted}
             />
-            <NavItem
-              icon={
-                <IcClock
-                  size={15}
-                  color={tab === 'recent' ? '#f97316' : textMuted}
-                />
-              }
-              label="Recent"
-              active={tab === 'recent'}
-              onClick={() => setTab('recent')}
-              dark={dark}
+          }
+          label="Reasons"
+          active={tab === 'reasons'}
+          onClick={() => {
+            setTab('reasons');
+            setSidebarOpen(false);
+          }}
+          dark={dark}
+        />
+        <NavItem
+          icon={
+            <IcClock
+              size={15}
+              color={tab === 'recent' ? '#f97316' : textMuted}
             />
-
-            <div style={{ flex: 1 }} />
-
-            <button
-              onClick={() => setDark(!dark)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '9px 12px',
-                borderRadius: 10,
-                border: 'none',
-                background: dark
-                  ? 'rgba(255,255,255,0.06)'
-                  : 'rgba(0,0,0,0.05)',
-                color: textMuted,
-                fontWeight: 600,
-                fontSize: 12,
-                cursor: 'pointer',
-                width: '100%',
-              }}
-            >
-              {dark ? (
-                <IcSun size={14} color={textMuted} />
-              ) : (
-                <IcMoon size={14} color={textMuted} />
-              )}
-              {dark ? 'Light Mode' : 'Dark Mode'}
-            </button>
-
-            <button
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '9px 12px',
-                borderRadius: 10,
-                border: 'none',
-                background: 'transparent',
-                color: textMuted,
-                fontWeight: 600,
-                fontSize: 12,
-                cursor: 'pointer',
-                width: '100%',
-              }}
-            >
-              <IcMoreHorizontal size={14} color={textMuted} />
-              More
-            </button>
-          </>
-        )}
+          }
+          label="Recent"
+          active={tab === 'recent'}
+          onClick={() => {
+            setTab('recent');
+            setSidebarOpen(false);
+          }}
+          dark={dark}
+        />
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={() => setDark(!dark)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '9px 12px',
+            borderRadius: 10,
+            border: 'none',
+            background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+            color: textMuted,
+            fontWeight: 600,
+            fontSize: 12,
+            cursor: 'pointer',
+            width: '100%',
+          }}
+        >
+          {dark ? (
+            <IcSun size={14} color={textMuted} />
+          ) : (
+            <IcMoon size={14} color={textMuted} />
+          )}
+          {dark ? 'Light Mode' : 'Dark Mode'}
+        </button>
       </div>
 
       {/* Main */}
@@ -1318,24 +1173,23 @@ export const App = () => {
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
+          width: '100%',
         }}
       >
-        {/* Sticky header */}
+        {/* Header */}
         <div
           style={{
-            background: headerBg,
-            borderBottom: `1px solid ${borderColor}`,
             position: 'sticky',
             top: 0,
             zIndex: 40,
-            backdropFilter: 'blur(12px)',
+            backdropFilter: 'blur(16px)',
           }}
         >
           <div
             style={{
               background:
                 'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #a855f7 100%)',
-              padding: '16px 20px 0',
+              padding: '14px 16px 0',
               position: 'relative',
               overflow: 'hidden',
             }}
@@ -1345,7 +1199,7 @@ export const App = () => {
                 position: 'absolute',
                 inset: 0,
                 backgroundImage:
-                  'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.12) 0%, transparent 55%)',
+                  'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 55%)',
               }}
             />
             <div style={{ position: 'relative', zIndex: 1 }}>
@@ -1353,11 +1207,11 @@ export const App = () => {
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: 14,
+                  alignItems: 'center',
+                  marginBottom: 12,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <button
                     onClick={() => setSidebarOpen(!sidebarOpen)}
                     style={{
@@ -1375,8 +1229,8 @@ export const App = () => {
                   </button>
                   <div
                     style={{
-                      width: 36,
-                      height: 36,
+                      width: 34,
+                      height: 34,
                       borderRadius: 10,
                       background: 'rgba(255,255,255,0.2)',
                       display: 'flex',
@@ -1384,12 +1238,13 @@ export const App = () => {
                       justifyContent: 'center',
                     }}
                   >
-                    <IcBarChart2 size={20} color="#fff" />
+                    <IcBarChart2 size={18} color="#fff" />
                   </div>
                   <div>
                     <h1
+                      className="header-title"
                       style={{
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: 800,
                         color: '#fff',
                         letterSpacing: '-0.5px',
@@ -1402,14 +1257,15 @@ export const App = () => {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 8,
-                        marginTop: 2,
+                        gap: 6,
+                        marginTop: 1,
+                        flexWrap: 'wrap',
                       }}
                     >
                       <p
                         style={{
-                          fontSize: 12,
-                          color: 'rgba(255,255,255,0.75)',
+                          fontSize: 11,
+                          color: 'rgba(255,255,255,0.8)',
                           margin: 0,
                         }}
                       >
@@ -1420,13 +1276,13 @@ export const App = () => {
                           style={{
                             background: 'rgba(255,255,255,0.2)',
                             borderRadius: 99,
-                            padding: '1px 8px',
+                            padding: '1px 7px',
                             fontSize: 10,
                             color: '#fff',
                             fontWeight: 600,
                           }}
                         >
-                          <LastUpdated ts={lastUpdated} dark={true} />
+                          <LastUpdated ts={lastUpdated} />
                         </span>
                       )}
                     </div>
@@ -1435,21 +1291,22 @@ export const App = () => {
                 <button
                   onClick={loadData}
                   style={{
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: 700,
                     background: 'rgba(255,255,255,0.2)',
                     border: '1px solid rgba(255,255,255,0.3)',
                     color: '#fff',
                     borderRadius: 99,
-                    padding: '6px 14px',
+                    padding: '6px 12px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                     backdropFilter: 'blur(4px)',
+                    flexShrink: 0,
                   }}
                 >
-                  <IcRefreshCw size={12} color="#fff" /> Refresh
+                  <IcRefreshCw size={11} color="#fff" /> Refresh
                 </button>
               </div>
               <div
@@ -1462,18 +1319,18 @@ export const App = () => {
                   width: 'fit-content',
                 }}
               >
-                {(['overview', 'reasons', 'recent'] as const).map((t) => (
+                {['overview', 'reasons', 'recent'].map((t) => (
                   <button
                     key={t}
                     onClick={() => setTab(t)}
                     style={{
                       fontSize: 12,
                       fontWeight: t === tab ? 700 : 500,
-                      color: t === tab ? '#111827' : 'rgba(255,255,255,0.75)',
+                      color: t === tab ? '#111827' : 'rgba(255,255,255,0.8)',
                       background: t === tab ? '#ffffff' : 'transparent',
                       border: 'none',
                       borderRadius: 99,
-                      padding: '5px 16px',
+                      padding: '5px 14px',
                       cursor: 'pointer',
                       transition: 'all 0.15s',
                     }}
@@ -1482,20 +1339,21 @@ export const App = () => {
                   </button>
                 ))}
               </div>
-              <div style={{ height: 14 }} />
+              <div style={{ height: 12 }} />
             </div>
           </div>
         </div>
 
         {/* Body */}
         <div
+          className="content-pad"
           style={{
             flex: 1,
-            padding: '20px 20px 40px',
-            maxWidth: 900,
+            padding: '18px 16px 48px',
+            maxWidth: 1200,
             width: '100%',
             margin: '0 auto',
-            animation: 'fadeIn 0.3s ease',
+            animation: 'fadeUp 0.3s ease',
           }}
         >
           {loading ? (
@@ -1505,14 +1363,14 @@ export const App = () => {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                paddingTop: 100,
+                paddingTop: 80,
                 gap: 16,
               }}
             >
               <div
                 style={{
-                  width: 36,
-                  height: 36,
+                  width: 34,
+                  height: 34,
                   border: '3px solid rgba(249,115,22,0.2)',
                   borderTop: '3px solid #f97316',
                   borderRadius: '50%',
@@ -1522,7 +1380,7 @@ export const App = () => {
               <p style={{ fontSize: 13, color: textMuted }}>Loading stats…</p>
             </div>
           ) : error ? (
-            <div style={{ textAlign: 'center', paddingTop: 100 }}>
+            <div style={{ textAlign: 'center', paddingTop: 80 }}>
               <p style={{ color: '#ef4444', fontSize: 14 }}>{error}</p>
               <button
                 onClick={loadData}
@@ -1544,49 +1402,35 @@ export const App = () => {
             <EmptyState dark={dark} />
           ) : (
             <>
-              {/* OVERVIEW */}
               {tab === 'overview' && (
                 <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
                 >
-                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <div className="kpi-grid">
                     <KpiCard
                       label="Removals"
                       value={stats.totalRemovals}
                       accent="#f97316"
-                      icon={<IcTrash size={17} color="#f97316" />}
+                      icon={<IcTrash size={18} color="#f97316" />}
                       dark={dark}
                     />
                     <KpiCard
                       label="Posts"
                       value={stats.postCount}
                       accent="#3b82f6"
-                      icon={<IcFileText size={17} color="#3b82f6" />}
-                      dark={dark}
-                    />
-                    <KpiCard
-                      label="Comments"
-                      value={stats.commentCount}
-                      accent="#a855f7"
-                      icon={<IcMessageSquare size={17} color="#a855f7" />}
+                      icon={<IcFileText size={18} color="#3b82f6" />}
                       dark={dark}
                     />
                     <KpiCard
                       label="Busiest Day"
                       value={busiestDay?.[0]?.slice(0, 3) ?? '—'}
                       accent="#10b981"
-                      icon={<IcCalendar size={17} color="#10b981" />}
+                      icon={<IcCalendar size={18} color="#10b981" />}
                       dark={dark}
                     />
                   </div>
 
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 14,
-                    }}
-                  >
+                  <div className="two-col-grid">
                     {topReason && (
                       <Card
                         dark={dark}
@@ -1598,14 +1442,14 @@ export const App = () => {
                         }}
                       >
                         <CardHeader
-                          icon={<IcTarget size={15} color="#f97316" />}
-                          title="Most Cited Rule This Week"
+                          icon={<IcTarget size={14} color="#f97316" />}
+                          title="Most Cited Rule"
                           iconBg="rgba(249,115,22,0.15)"
                           dark={dark}
                         />
                         <p
                           style={{
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: 800,
                             color: dark ? '#fed7aa' : '#ea580c',
                             marginBottom: 4,
@@ -1616,7 +1460,7 @@ export const App = () => {
                         </p>
                         <p
                           style={{
-                            fontSize: 12,
+                            fontSize: 11,
                             color: '#fb923c',
                             fontWeight: 600,
                           }}
@@ -1632,8 +1476,8 @@ export const App = () => {
                     {stats.topOffenders.length > 0 && (
                       <Card dark={dark}>
                         <CardHeader
-                          icon={<IcUser size={15} color="#ef4444" />}
-                          title="Repeat Offenders"
+                          icon={<IcUser size={14} color="#ef4444" />}
+                          title={`Repeat Offenders (${stats.topOffenders.length})`}
                           iconBg="rgba(239,68,68,0.12)"
                           dark={dark}
                         />
@@ -1658,6 +1502,12 @@ export const App = () => {
                                   fontSize: 12,
                                   color: dark ? '#d1d5db' : '#374151',
                                   fontWeight: 500,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  flex: 1,
+                                  minWidth: 0,
+                                  marginRight: 8,
                                 }}
                               >
                                 {i + 1}. u/{o.username}
@@ -1670,6 +1520,7 @@ export const App = () => {
                                   color: '#ef4444',
                                   padding: '2px 9px',
                                   borderRadius: 99,
+                                  flexShrink: 0,
                                 }}
                               >
                                 {o.count}x
@@ -1684,7 +1535,7 @@ export const App = () => {
                   {Object.keys(stats.byMod).length > 0 && (
                     <Card dark={dark}>
                       <CardHeader
-                        icon={<IcBarChart2 size={15} color="#3b82f6" />}
+                        icon={<IcBarChart2 size={14} color="#3b82f6" />}
                         title="Mod Activity"
                         iconBg="rgba(59,130,246,0.12)"
                         dark={dark}
@@ -1698,71 +1549,92 @@ export const App = () => {
                     </Card>
                   )}
 
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 14,
-                    }}
-                  >
+                  <div className="two-col-grid">
                     <Card dark={dark}>
                       <CardHeader
-                        icon={<IcMail size={15} color="#f97316" />}
+                        icon={<IcMail size={14} color="#f97316" />}
                         title="Weekly Digest"
                         iconBg="rgba(249,115,22,0.12)"
                         dark={dark}
                       />
-                      <p
-                        style={{
-                          fontSize: 12,
-                          color: textMuted,
-                          marginBottom: 14,
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        Post this week's stats as a mod-only sticky.
-                      </p>
-                      <button
-                        onClick={generateDigest}
-                        disabled={digestLoading || stats.totalRemovals === 0}
-                        style={{
-                          width: '100%',
-                          padding: '12px 0',
-                          background:
-                            stats.totalRemovals === 0
-                              ? 'rgba(249,115,22,0.3)'
-                              : 'linear-gradient(135deg,#ea580c,#f97316,#a855f7)',
-                          border: 'none',
-                          borderRadius: 12,
-                          color: '#fff',
-                          fontSize: 13,
-                          fontWeight: 800,
-                          cursor:
-                            stats.totalRemovals === 0
-                              ? 'not-allowed'
-                              : 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 8,
-                        }}
-                      >
-                        <IcMail size={14} color="#fff" />
-                        {digestLoading
-                          ? 'Generating…'
-                          : 'Generate Weekly Digest'}
-                      </button>
-                      {digestMsg && (
+                      {!digestResult && (
+                        <p
+                          style={{
+                            fontSize: 12,
+                            color: textMuted,
+                            marginBottom: 14,
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          Post this week's stats as a mod-only sticky.
+                        </p>
+                      )}
+                      {(!digestResult || digestResult.error) && (
+                        <button
+                          onClick={generateDigest}
+                          disabled={digestLoading || stats.totalRemovals === 0}
+                          style={{
+                            width: '100%',
+                            padding: '11px 0',
+                            background:
+                              stats.totalRemovals === 0
+                                ? 'rgba(249,115,22,0.3)'
+                                : 'linear-gradient(135deg,#ea580c,#f97316,#a855f7)',
+                            border: 'none',
+                            borderRadius: 12,
+                            color: '#fff',
+                            fontSize: 13,
+                            fontWeight: 800,
+                            cursor:
+                              stats.totalRemovals === 0
+                                ? 'not-allowed'
+                                : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 7,
+                            opacity: digestLoading ? 0.7 : 1,
+                          }}
+                        >
+                          {digestLoading ? (
+                            <>
+                              <div
+                                style={{
+                                  width: 14,
+                                  height: 14,
+                                  border: '2px solid rgba(255,255,255,0.3)',
+                                  borderTop: '2px solid #fff',
+                                  borderRadius: '50%',
+                                  animation: 'spin 0.7s linear infinite',
+                                }}
+                              />{' '}
+                              Posting…
+                            </>
+                          ) : (
+                            <>
+                              <IcMail size={13} color="#fff" /> Generate Digest
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {digestResult?.error && (
                         <p
                           style={{
                             fontSize: 11,
-                            color: textMuted,
+                            color: '#ef4444',
                             textAlign: 'center',
-                            marginTop: 8,
+                            marginTop: 10,
                           }}
                         >
-                          {digestMsg}
+                          {digestResult.error}
                         </p>
+                      )}
+                      {digestResult && !digestResult.error && (
+                        <DigestSuccessBanner
+                          postUrl={digestResult.postUrl}
+                          dark={dark}
+                          onDismiss={() => setDigestResult(null)}
+                        />
                       )}
                     </Card>
 
@@ -1771,7 +1643,7 @@ export const App = () => {
                       style={{ borderColor: 'rgba(239,68,68,0.2)' }}
                     >
                       <CardHeader
-                        icon={<IcAlertTriangle size={15} color="#ef4444" />}
+                        icon={<IcAlertTriangle size={14} color="#ef4444" />}
                         title="Danger Zone"
                         iconBg="rgba(239,68,68,0.1)"
                         dark={dark}
@@ -1784,15 +1656,14 @@ export const App = () => {
                           lineHeight: 1.6,
                         }}
                       >
-                        Clear all removal data for the current week. This is
-                        permanent.
+                        Clear all removal data for the current week.
                       </p>
                       <button
                         onClick={() => setShowConfirm(true)}
                         disabled={clearLoading}
                         style={{
                           width: '100%',
-                          padding: '12px 0',
+                          padding: '11px 0',
                           background: 'rgba(239,68,68,0.08)',
                           border: '1px solid rgba(239,68,68,0.25)',
                           borderRadius: 12,
@@ -1803,10 +1674,10 @@ export const App = () => {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: 8,
+                          gap: 7,
                         }}
                       >
-                        <IcTrash size={14} color="#ef4444" />
+                        <IcTrash size={13} color="#ef4444" />
                         {clearLoading ? 'Clearing…' : 'Clear This Week'}
                       </button>
                       {clearMsg && (
@@ -1826,27 +1697,71 @@ export const App = () => {
                 </div>
               )}
 
-              {/* REASONS */}
               {tab === 'reasons' && (
                 <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
                 >
                   {ruleKeys.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                      {ruleKeys.map((r, i) => (
-                        <RuleBadge key={r} label={r} index={i} />
+                      {ruleKeys.map((r) => (
+                        <RuleBadge
+                          key={r}
+                          label={r}
+                          index={reasonColorMap[r]}
+                        />
                       ))}
                     </div>
                   )}
                   <Card dark={dark}>
-                    <SectionTitle dark={dark}>
-                      Removal Reasons This Week ({stats.totalRemovals} total)
-                    </SectionTitle>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 14,
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: dark ? '#6b7280' : '#9ca3af',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.1em',
+                          margin: 0,
+                        }}
+                      >
+                        Removal Reasons This Week ({stats.totalRemovals} total)
+                      </p>
+                      {Object.keys(stats.byReason).length > 6 && (
+                        <button
+                          onClick={() => setShowAllReasons((v) => !v)}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#f97316',
+                            background: 'rgba(249,115,22,0.1)',
+                            border: '1px solid rgba(249,115,22,0.2)',
+                            borderRadius: 99,
+                            padding: '4px 12px',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          {showAllReasons
+                            ? 'Show less'
+                            : `Show all ${Object.keys(stats.byReason).length}`}
+                        </button>
+                      )}
+                    </div>
                     <BarChart
                       data={stats.byReason}
                       total={stats.totalRemovals}
                       colorized
                       dark={dark}
+                      showAll={showAllReasons}
+                      colorMap={reasonColorMap}
                     />
                   </Card>
                   <Card dark={dark}>
@@ -1861,11 +1776,10 @@ export const App = () => {
                 </div>
               )}
 
-              {/* RECENT */}
               {tab === 'recent' && (
                 <Card dark={dark}>
                   <SectionTitle dark={dark}>
-                    Recent Removals (this week)
+                    Recent Post Removals (this week)
                   </SectionTitle>
                   {recentRemovals.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '40px 0' }}>
@@ -1889,24 +1803,13 @@ export const App = () => {
                         />
                       </div>
                       <p style={{ fontSize: 13, color: textMuted }}>
-                        No removals logged yet.
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: dark ? '#4b5563' : '#9ca3af',
-                          marginTop: 4,
-                        }}
-                      >
-                        Remove a post or comment to see it here.
+                        No posts removed yet.
                       </p>
                     </div>
                   ) : (
-                    <div>
-                      {recentRemovals.map((entry) => (
-                        <RemovalRow key={entry.id} entry={entry} dark={dark} />
-                      ))}
-                    </div>
+                    recentRemovals.map((entry) => (
+                      <RemovalRow key={entry.id} entry={entry} dark={dark} />
+                    ))
                   )}
                 </Card>
               )}
@@ -1918,8 +1821,12 @@ export const App = () => {
   );
 };
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+const root = document.getElementById('root');
+if (root)
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>
+  );
+
+export default App;

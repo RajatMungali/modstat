@@ -129,14 +129,21 @@ function extractPostIdFromBody(body: Record<string, unknown>): string {
 }
 
 function pickModActionReasonText(action: ModActionReasonFields): string | null {
-  const text = [action.description, action.details]
+  const raw = [action.description, action.details]
     .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
     .join(' — ')
     .trim();
-  return text.length > 0 ? text : null;
+
+  if (raw.length === 0) return null;
+
+  // Strip trailing " — <number>" that Reddit appends to removal reasons
+  const cleaned = raw.replace(/\s*—\s*\d+\s*$/, '').trim();
+  return cleaned.length > 0 ? cleaned : null;
 }
 
-async function findEntryIdByRedditId(redditPostId: string): Promise<string | null> {
+async function findEntryIdByRedditId(
+  redditPostId: string
+): Promise<string | null> {
   const normalized = normalizeRedditPostId(redditPostId);
   if (!normalized) return null;
 
@@ -189,37 +196,28 @@ async function fetchRemovalReasonFromModLog(
     const actions = await reddit
       .getModerationLog({
         subredditName,
-        more: {
-          parentId: normalized,
-          children: [],
-          depth: 1,
-        },
+        type: 'addremovalreason',
         limit: 25,
         pageSize: 25,
       })
       .all();
 
-    let fromAddReason: string | null = null;
-    let fromRemoval: string | null = null;
+    const match = actions.find(
+      (a) => (a as ModActionReasonFields).target?.id === normalized
+    );
 
-    for (const action of actions) {
-      const typed = action as ModActionReasonFields;
-      if (typed.type === 'addremovalreason') {
-        const text = pickModActionReasonText(typed);
-        if (text) fromAddReason = text;
-      }
-      if (
-        (typed.type === 'removelink' ||
-          typed.type === 'spamlink' ||
-          typed.type === 'filterlink') &&
-        !fromRemoval
-      ) {
-        const text = pickModActionReasonText(typed);
-        if (text && text.toLowerCase() !== 'remove') fromRemoval = text;
-      }
+    if (!match) {
+      console.log(
+        `[ModStat] fetchRemovalReasonFromModLog: no match for ${normalized}`
+      );
+      return null;
     }
 
-    return fromAddReason ?? fromRemoval;
+    const reason = pickModActionReasonText(match as ModActionReasonFields);
+    console.log(
+      `[ModStat] fetchRemovalReasonFromModLog: found "${reason}" for ${normalized}`
+    );
+    return reason;
   } catch (err) {
     console.error('[ModStat] fetchRemovalReasonFromModLog error:', err);
     return null;
@@ -261,9 +259,45 @@ async function resolvePostIdForAddRemovalReason(
   }
 }
 
+async function fetchCommentRemovalReasonFromModLog(
+  commentId: string
+): Promise<string | null> {
+  const subredditName = context.subredditName ?? '';
+  if (!subredditName || !commentId) return null;
+
+  try {
+    const actions = await reddit
+      .getModerationLog({
+        subredditName,
+        type: 'addremovalreason',
+        limit: 10,
+        pageSize: 10,
+      })
+      .all();
+
+    const match = actions.find(
+      (a) => (a as ModActionReasonFields).target?.id === commentId
+    );
+
+    if (!match) {
+      console.log(
+        `[ModStat] fetchCommentRemovalReasonFromModLog: no match for ${commentId}`
+      );
+      return null;
+    }
+
+    const reason = pickModActionReasonText(match as ModActionReasonFields);
+    console.log(
+      `[ModStat] fetchCommentRemovalReasonFromModLog: found "${reason}" for ${commentId}`
+    );
+    return reason;
+  } catch (err) {
+    console.error('[ModStat] fetchCommentRemovalReasonFromModLog error:', err);
+    return null;
+  }
+}
+
 // ── Helper: extract reason from sticky body ─
-// Reddit saved responses often send: "{linked rule title} - {message body}"
-// e.g. "No Promo - …" when the template name is "Prom" and rule is "No Promo".
 function extractReasonFromStickyBody(
   messageText: string,
   subredditName: string
@@ -294,7 +328,9 @@ function isRealComment(tc: Record<string, unknown> | null): boolean {
   return typeof tc.id === 'string' && tc.id.length > 0;
 }
 
-// ── Helper: deduplication check ────────────
+// ── Helper: deduplication check (with TTL) ─
+// Used for general in-flight dedup (removelink, removecomment, etc.)
+// TTL is 60s — enough to suppress duplicate webhook deliveries.
 async function isDuplicate(contentId: string): Promise<boolean> {
   if (!contentId) return false;
   const dedupKey = `dedup:${contentId}`;
@@ -339,7 +375,7 @@ async function saveRemoval(entry: RemovalEntry): Promise<void> {
     await setRedditIdMap(entry.redditId, entry.id);
   }
   console.log(
-    `[ModStat] Logged post: "${entry.title}" | mod:${entry.modName} | reason:${entry.removalReason}`
+    `[ModStat] Logged: "${entry.title}" | type:${entry.contentType} | mod:${entry.modName} | reason:${entry.removalReason}`
   );
 }
 
@@ -396,7 +432,7 @@ async function updateRemovalEntry(
   );
 }
 
-// ── Helper: patch a specific entry's reason ────────────────────────────────
+// ── Helper: patch a specific entry's reason ─
 async function patchReasonForEntry(
   entryId: string,
   reason: string,
@@ -476,7 +512,13 @@ async function reconcilePendingRemovalReasons(): Promise<void> {
 
     if (Date.now() - entry.timestamp < RECONCILE_MIN_AGE_MS) continue;
 
-    const reason = await fetchRemovalReasonFromModLog(entry.redditId);
+    let reason: string | null = null;
+    if (entry.contentType === 'comment') {
+      reason = await fetchCommentRemovalReasonFromModLog(entry.redditId);
+    } else {
+      reason = await fetchRemovalReasonFromModLog(entry.redditId);
+    }
+
     if (!reason || reason === entry.removalReason) continue;
 
     const patched = await patchReasonForEntry(entryId, reason, true);
@@ -487,19 +529,23 @@ async function reconcilePendingRemovalReasons(): Promise<void> {
 }
 
 // ── Helper: sync Reddit filter removals from mod log ──
+// FIX: Removed `type: 'removelink'` filter — Reddit logs its automated
+// spam/domain filter removals as 'filterlink' or 'spamlink', not 'removelink',
+// so the old query returned zero results every sync cycle.
+// FIX: Replaced isDuplicate() with a keyed Redis check using a 24h TTL so
+// posts aren't permanently marked as seen after the first sync run.
 async function syncRedditFilterRemovals(): Promise<void> {
   try {
     const actions = await reddit
       .getModerationLog({
         subredditName: context.subredditName ?? '',
         moderatorUsernames: ['reddit'],
-        type: 'removelink',
+        // No type filter: filterlink + spamlink are what Reddit actually logs
         limit: 50,
         pageSize: 50,
       })
       .all();
 
-    // On first run, log the raw shape so we can confirm field names
     if (actions.length > 0) {
       console.log(
         '[ModStat] sample ModAction:',
@@ -513,12 +559,16 @@ async function syncRedditFilterRemovals(): Promise<void> {
       const contentId = action.target?.id ?? '';
       if (!contentId.startsWith('t3_')) continue;
 
-      // Already tracked — skip
+      // Skip if already tracked this week
       const existing = await getEntryIdByRedditId(contentId);
       if (existing) continue;
 
-      // Dedup guard (prefix with 'sync:' to avoid colliding with trigger dedup keys)
-      if (await isDuplicate(`sync:${contentId}`)) continue;
+      // Dedup with 24h TTL — prevents double-logging within a day while
+      // allowing re-inspection after expiry (unlike the old unbounded set).
+      const dedupKey = `dedup:sync:${contentId}`;
+      const alreadySeen = await redis.get(dedupKey).catch(() => null);
+      if (alreadySeen) continue;
+      await redis.set(dedupKey, '1', { ex: 86400 });
 
       const authorName = String(action.target?.author ?? 'unknown');
       if (isBotAuthor(authorName, context.subredditName ?? '')) continue;
@@ -597,7 +647,7 @@ async function sendWeeklyDigest(): Promise<void> {
   const noReasonCount = stats.byReason[NO_REASON] ?? 0;
 
   const glance = [
-    `📊 **${stats.totalRemovals} posts removed** this week${wow(stats.totalRemovals, prevTotal)}`,
+    `📊 **${stats.totalRemovals} removals** this week${wow(stats.totalRemovals, prevTotal)}`,
     topViolation
       ? `🚨 Top violation: **${topViolation[0]}** — ${topViolation[1]} (${Math.round((topViolation[1] / stats.totalRemovals) * 100)}%)`
       : '',
@@ -729,11 +779,17 @@ triggers.post('/on-mod-action', async (c) => {
       body?.action ?? body?.type ?? body?.actionType ?? ''
     ).toLowerCase();
 
+    // FIX: For filterlink/spamlink events Reddit often sends an empty moderator
+    // field. Fall back to 'reddit' for those action types so entries are
+    // attributed correctly instead of being saved with modName: 'mod'.
     const modName = String(
       body?.moderator?.name ??
         body?.moderator ??
         body?.mod ??
         body?.performedBy ??
+        (action === 'filterlink' || action === 'spamlink'
+          ? 'reddit'
+          : undefined) ??
         'mod'
     );
 
@@ -806,47 +862,66 @@ triggers.post('/on-mod-action', async (c) => {
 
     // ── ADDREMOVALREASON ────────────────────
     if (action === 'addremovalreason') {
-      console.log(
-        '[ModStat] addremovalreason full payload:',
-        JSON.stringify(body, null, 2)
-      );
+      const tc = body?.targetComment as Record<string, unknown> | null;
+      const commentId = String(tc?.id ?? '');
+      const isCommentReason = commentId.startsWith('t1_');
 
-      const reasonTitle = String(
-        body?.removalReason?.title ??
-          body?.removalReason?.name ??
-          body?.removalReason?.text ??
-          body?.removalReason?.message ??
-          body?.reason?.title ??
-          body?.reason?.name ??
-          body?.reason ??
-          body?.title ??
-          body?.details ??
-          body?.description ??
-          body?.message ??
-          ''
-      ).trim();
-
-      if (reasonTitle.length > 0) {
+      if (isCommentReason) {
         console.log(
-          `[ModStat] addremovalreason: captured title "${reasonTitle}"`
+          `[ModStat] addremovalreason for comment ${commentId} — querying mod log`
         );
+        try {
+          const reason = await fetchCommentRemovalReasonFromModLog(commentId);
+          if (reason) {
+            const entryId = await getEntryIdByRedditId(commentId);
+            if (entryId) {
+              await patchReasonForEntry(entryId, reason, true);
+              console.log(
+                `[ModStat] Comment reason patched: "${reason}" for ${commentId}`
+              );
+            } else {
+              console.log(
+                `[ModStat] addremovalreason: no entry found for comment ${commentId}`
+              );
+            }
+          } else {
+            console.log(
+              `[ModStat] addremovalreason: no reason found in mod log for ${commentId}`
+            );
+          }
+        } catch (e) {
+          console.error('[ModStat] addremovalreason comment modlog error:', e);
+        }
+      } else {
         const bodyRecord = body as Record<string, unknown>;
         let postId = extractPostIdFromBody(bodyRecord);
         if (!postId) {
-          postId = await resolvePostIdForAddRemovalReason(reasonTitle);
+          postId = await resolvePostIdForAddRemovalReason('');
         }
-        const patched = postId
-          ? await patchReasonForPost(postId, reasonTitle, true)
-          : false;
-        if (!patched) {
+
+        if (postId) {
+          try {
+            const reason = await fetchRemovalReasonFromModLog(postId);
+            if (reason) {
+              const patched = await patchReasonForPost(postId, reason, true);
+              if (!patched) {
+                console.log(
+                  '[ModStat] addremovalreason post: no matching entry — reconcile will retry'
+                );
+              }
+            } else {
+              console.log(
+                `[ModStat] addremovalreason post: no reason in mod log for ${postId}`
+              );
+            }
+          } catch (e) {
+            console.error('[ModStat] addremovalreason post modlog error:', e);
+          }
+        } else {
           console.log(
-            '[ModStat] addremovalreason: no matching entry — reconcile job will retry'
+            '[ModStat] addremovalreason: could not resolve post id — reconcile will retry'
           );
         }
-      } else {
-        console.log(
-          '[ModStat] addremovalreason: no title in payload — reconcile via mod log'
-        );
       }
 
       return c.json<TriggerResponse>(
@@ -855,9 +930,84 @@ triggers.post('/on-mod-action', async (c) => {
       );
     }
 
+    // ── REMOVECOMMENT ────────────────────────
+    if (action === 'removecomment') {
+      const rawComment = body?.targetComment as Record<string, unknown> | null;
+
+      if (!rawComment) {
+        return c.json<TriggerResponse>(
+          { status: 'success', message: 'No comment target' },
+          200
+        );
+      }
+
+      const contentId = String(rawComment?.id ?? '');
+      if (!contentId) {
+        return c.json<TriggerResponse>(
+          { status: 'success', message: 'No comment id' },
+          200
+        );
+      }
+
+      const targetUser = body?.targetUser as Record<string, unknown> | null;
+      const authorName = String(
+        targetUser?.name ??
+          (rawComment?.author as Record<string, unknown>)?.name ??
+          rawComment?.author ??
+          'unknown'
+      );
+
+      if (isBotAuthor(authorName, context.subredditName ?? '')) {
+        console.log(
+          `[ModStat] Skipping bot comment removal by u/${authorName}`
+        );
+        return c.json<TriggerResponse>(
+          { status: 'success', message: 'Skipped bot author' },
+          200
+        );
+      }
+
+      if (await isDuplicate(contentId)) {
+        console.log(
+          `[ModStat] Duplicate comment removal skipped: ${contentId}`
+        );
+        return c.json<TriggerResponse>(
+          { status: 'success', message: 'Duplicate skipped' },
+          200
+        );
+      }
+
+      const bodyText = String(
+        rawComment?.body ?? rawComment?.content ?? ''
+      ).trim();
+      const title =
+        bodyText.length > 0
+          ? `"${bodyText.substring(0, 60)}${bodyText.length > 60 ? '...' : ''}"`
+          : '(no content)';
+
+      const entry: RemovalEntry = {
+        id: makeId(),
+        redditId: contentId,
+        contentType: 'comment',
+        title,
+        authorName,
+        modName,
+        removalReason: NO_REASON,
+        timestamp: Date.now(),
+      };
+
+      await saveRemoval(entry);
+
+      return c.json<TriggerResponse>(
+        { status: 'success', message: 'Logged comment removal' },
+        200
+      );
+    }
+
     // ── Only process post removal actions ───
-    // removecomment is intentionally excluded — posts only
-    // spamlink / filterlink = Reddit's automated spam/content filter
+    // FIX: filterlink and spamlink are Reddit's automated filter action types.
+    // They were already listed here but the real-time path was broken because
+    // modName defaulted to 'mod' when the field was empty (fixed above).
     const isRemoval =
       action === 'removelink' ||
       action === 'remove' ||
@@ -885,7 +1035,6 @@ triggers.post('/on-mod-action', async (c) => {
 
     const contentId = String(rawPost?.id ?? rawPost?.name ?? '');
 
-    // ── Extract author ───────────────────────
     const targetUser = body?.targetUser as Record<string, unknown> | null;
     const authorName = String(
       targetUser?.name ??
@@ -905,7 +1054,6 @@ triggers.post('/on-mod-action', async (c) => {
 
     const title = String(rawPost?.title ?? '').trim() || '(no title)';
 
-    // ── Check if human is acting on an existing automod/reddit entry ─
     if (!isAutomatedMod(modName) && contentId) {
       const existingEntryId = await getEntryIdByRedditId(contentId);
 
@@ -937,7 +1085,6 @@ triggers.post('/on-mod-action', async (c) => {
       }
     }
 
-    // ── Deduplication check ──────────────────
     if (await isDuplicate(contentId)) {
       console.log(`[ModStat] Duplicate skipped: ${contentId}`);
       return c.json<TriggerResponse>(
@@ -946,7 +1093,6 @@ triggers.post('/on-mod-action', async (c) => {
       );
     }
 
-    // ── Determine removal reason ─────────────
     let removalReason = NO_REASON;
     const pendingAutomodReason = await consumePendingAutomodReason(contentId);
     if (pendingAutomodReason) {
@@ -956,7 +1102,6 @@ triggers.post('/on-mod-action', async (c) => {
     } else if (modName.toLowerCase() === 'reddit') {
       removalReason = REASON_REDDIT_FILTER;
     } else if (action === 'filterlink' || action === 'spamlink') {
-      // Catch Reddit filter actions regardless of what modName comes through
       removalReason = REASON_REDDIT_FILTER;
     }
 
@@ -1050,7 +1195,10 @@ triggers.post('/on-scheduler', async (c) => {
       await syncRedditFilterRemovals();
       await reconcilePendingRemovalReasons();
       return c.json<TriggerResponse>(
-        { status: 'success', message: 'Reddit filter sync and reconcile complete' },
+        {
+          status: 'success',
+          message: 'Reddit filter sync and reconcile complete',
+        },
         200
       );
     }

@@ -16,13 +16,11 @@ menu.post('/post-create', async (c) => {
   try {
     const subredditName = context.subredditName ?? '';
 
-    // Check if a dashboard post already exists
     const existingPostId = await redis
       .get(DASHBOARD_POST_KEY)
       .catch(() => null);
 
     if (existingPostId) {
-      // Post already exists — just navigate to it
       console.log(
         '[ModStat] Dashboard post exists, navigating to:',
         existingPostId
@@ -35,16 +33,13 @@ menu.post('/post-create', async (c) => {
       );
     }
 
-    // No existing post — create a new custom post (loads the game entrypoint)
     const post = await reddit.submitCustomPost({
       subredditName,
       title: 'ModStat — Weekly Removal Analytics Dashboard',
       entrypoint: 'game',
     });
 
-    // Store the post ID so we reuse it next time
     await redis.set(DASHBOARD_POST_KEY, post.id);
-
     console.log('[ModStat] Dashboard post created:', post.id);
 
     return c.json<UiResponse>(
@@ -80,11 +75,13 @@ menu.post('/reset-dashboard', async (c) => {
 menu.post('/seed-demo-data', async (c) => {
   try {
     const rules = [
+      'No Pornography',
+      'No Promotions',
       'No Spam',
-      'Harassment',
-      'Off-Topic',
-      'Self-Promotion',
-      'Misinformation',
+      'No OnlyFans',
+      'No Racism',
+      'Low Effort',
+      'Bullying',
     ];
 
     const mods = ['alpha_mod', 'beta_mod', 'gamma_mod'];
@@ -107,55 +104,151 @@ menu.post('/seed-demo-data', async (c) => {
       'Sunday',
     ];
 
+    // Realistic post titles per rule
+    const postTitles: Record<string, string[]> = {
+      'No Pornography': [
+        'Rate my girlfriend 😈',
+        'Anyone got the full video?',
+        'NSFW cosplay drop',
+        'Late night content for the boys',
+      ],
+
+      'No Promotions': [
+        'Check out my YouTube channel!',
+        'I just launched my new app',
+        'Follow my Instagram for more',
+        'Join my Discord server!',
+      ],
+
+      'No Spam': [
+        'FREE ROBUX CLICK HERE',
+        'Best crypto investment 2026',
+        'Make money fast with this method',
+        'This site gives free followers',
+      ],
+
+      'No OnlyFans': [
+        'New content just dropped 💋',
+        'Link in bio for exclusive pics',
+        'Subscribe for the uncensored version',
+        'DM me for premium content',
+      ],
+
+      'No Racism': [
+        'Why are people from [group] like this?',
+        'This meme is actually true',
+        'Certain races ruin every game',
+        'Guess the stereotype 😂',
+      ],
+
+      'Low Effort': ['lol', 'W or L?', 'Title says it all', '💀'],
+
+      'Bullying': [
+        'This dude is actually pathetic',
+        'Everyone point and laugh at this clown',
+        'Bro should delete his account',
+        'Imagine being this stupid',
+      ],
+    };
+
+    // Realistic comment texts per rule
+    const commentTitles: Record<string, string[]> = {
+      'No Pornography': [
+        'Send the full pic',
+        'Got any more NSFW stuff?',
+        'That video turned me on ngl',
+      ],
+
+      'No Promotions': [
+        'Sub to my channel if you like this',
+        'Use my referral code for rewards',
+        'Follow me on TikTok for more clips',
+      ],
+
+      'No Spam': [
+        'CLICK HERE TO WIN FREE MONEY',
+        'Best casino site online',
+        'Earn $500 daily from home',
+      ],
+
+      'No OnlyFans': [
+        'My OF link is in bio 😘',
+        'Selling exclusive content cheap',
+        'DM for premium access',
+      ],
+
+      'No Racism': [
+        'Typical behavior from them',
+        'That race always does this',
+        'Nobody wants those people here',
+      ],
+
+      'Low Effort': ['lol', 'k', '💀'],
+
+      'Bullying': [
+        'You are actually embarrassing',
+        'Nobody cares what you think',
+        'Touch grass loser',
+      ],
+    };
+
     const weeks = [
       {
         offset: 0,
-        total: 47,
-        byRule: [19, 14, 8, 4, 2],
-        byMod: [22, 17, 8],
-        byDay: [8, 4, 11, 6, 9, 14, 5],
-        byOffender: [8, 5, 4, 3, 2],
+        total: 18,
+        byRule: [5, 4, 3, 2, 2, 1, 1],
+        byMod: [9, 6, 3],
+        byDay: [3, 2, 4, 2, 3, 3, 1],
+        byOffender: [4, 3, 2, 2, 1],
+        commentRatio: 0.3,
       },
       {
         offset: -1,
-        total: 42,
-        byRule: [16, 16, 6, 3, 1],
-        byMod: [20, 15, 7],
-        byDay: [7, 5, 9, 5, 8, 11, 4],
-        byOffender: [6, 4, 3, 2, 1],
+        total: 16,
+        byRule: [5, 3, 3, 2, 1, 1, 1],
+        byMod: [8, 5, 3],
+        byDay: [2, 2, 3, 2, 3, 3, 1],
+        byOffender: [3, 3, 2, 2, 1],
+        commentRatio: 0.28,
       },
       {
         offset: -2,
-        total: 38,
-        byRule: [14, 12, 7, 3, 2],
-        byMod: [18, 13, 7],
-        byDay: [6, 4, 8, 5, 7, 10, 3],
-        byOffender: [5, 4, 3, 2, 1],
+        total: 14,
+        byRule: [4, 3, 2, 2, 1, 1, 1],
+        byMod: [7, 4, 3],
+        byDay: [2, 1, 3, 2, 2, 3, 1],
+        byOffender: [3, 2, 2, 1, 1],
+        commentRatio: 0.32,
       },
       {
         offset: -3,
-        total: 31,
-        byRule: [11, 10, 5, 3, 2],
-        byMod: [15, 11, 5],
-        byDay: [5, 3, 7, 4, 6, 8, 3],
-        byOffender: [4, 3, 2, 2, 1],
+        total: 12,
+        byRule: [4, 3, 2, 1, 1, 1, 0],
+        byMod: [6, 4, 2],
+        byDay: [2, 1, 2, 2, 2, 2, 1],
+        byOffender: [3, 2, 2, 1, 1],
+        commentRatio: 0.25,
       },
     ];
 
     for (const week of weeks) {
       const wk = getWeekKeyForWeekOffset(week.offset);
 
+      // Reason counts
       for (let i = 0; i < rules.length; i++)
         await redis.set(`${wk}:reason:${rules[i]}`, String(week.byRule[i]));
       await redis.set(`${wk}:reasonKeys`, JSON.stringify(rules));
 
+      // Mod counts
       for (let i = 0; i < mods.length; i++)
         await redis.set(`${wk}:mod:${mods[i]}`, String(week.byMod[i]));
       await redis.set(`${wk}:modKeys`, JSON.stringify(mods));
 
+      // Day counts
       for (let i = 0; i < days.length; i++)
         await redis.set(`${wk}:day:${days[i]}`, String(week.byDay[i]));
 
+      // Offender counts
       for (let i = 0; i < offenders.length; i++)
         await redis.set(
           `${wk}:offender:${offenders[i]}`,
@@ -163,31 +256,46 @@ menu.post('/seed-demo-data', async (c) => {
         );
       await redis.set(`${wk}:offenderKeys`, JSON.stringify(offenders));
 
+      // Build removal entries — mixed posts + comments
       const fakeIds: string[] = [];
-      for (let i = 0; i < Math.min(week.total, 20); i++) {
+      const seedCount = Math.min(week.total, 20);
+
+      for (let i = 0; i < seedCount; i++) {
         const id = `seed-${wk}-${i}`;
         fakeIds.push(id);
+
+        const isComment = Math.random() < week.commentRatio;
+        const rule = rules[i % rules.length];
+        const titlePool = isComment
+          ? (commentTitles[rule] ?? [`Comment removed for ${rule}`])
+          : (postTitles[rule] ?? [`Post removed for ${rule}`]);
+        const title = titlePool[i % titlePool.length];
+
+        // Spread timestamps across the week naturally (not just hourly)
+        const dayOffset = Math.floor(i / 3) % 7; // group ~3 removals per day
+        const hourOffset = (i % 3) * 2 + Math.floor(Math.random() * 2);
+        const timestamp =
+          Date.now() - dayOffset * 86400000 - hourOffset * 3600000;
+
         await redis.set(
           `removal:${id}`,
           JSON.stringify({
             id,
-            contentType: i % 3 === 0 ? 'comment' : 'post',
-            title:
-              i % 3 === 0
-                ? `"Seeded comment removal #${i + 1}"`
-                : `Seeded post removal #${i + 1}`,
+            contentType: isComment ? 'comment' : 'post',
+            title,
             authorName: offenders[i % offenders.length],
             modName: mods[i % mods.length],
-            removalReason: rules[i % rules.length],
-            timestamp: Date.now() - i * 3600000,
+            removalReason: rule,
+            timestamp,
           })
         );
       }
+
       await redis.set(`${wk}:list`, JSON.stringify(fakeIds));
     }
 
     return c.json<UiResponse>(
-      { showToast: 'Demo data seeded! 4 weeks loaded.' },
+      { showToast: 'Demo data seeded! 4 weeks of posts + comments loaded.' },
       200
     );
   } catch (error) {

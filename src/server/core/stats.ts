@@ -41,18 +41,16 @@ export async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
 
   const removalIds = await listGet(`${weekKey}:list`);
   let postCount = 0;
+  let commentCount = 0;
 
   for (const id of removalIds) {
     const raw = await redis.get(`removal:${id}`).catch(() => null);
     if (!raw) continue;
     try {
       const entry = JSON.parse(raw) as RemovalEntry;
-      if (entry.contentType === 'post') {
-        postCount++;
-      }
-    } catch {
-      // skip corrupt entries
-    }
+      if (entry.contentType === 'post') postCount++;
+      else if (entry.contentType === 'comment') commentCount++;
+    } catch {}
   }
 
   const now = new Date();
@@ -73,5 +71,6 @@ export async function buildWeeklyStats(weekKey: string): Promise<WeeklyStats> {
     weekStart: weekStart.getTime(),
     weekEnd: weekEnd.getTime(),
     postCount,
+    commentCount,
   };
 }

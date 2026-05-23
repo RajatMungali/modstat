@@ -17,7 +17,7 @@ export const REMOVAL_REASON_REDDIT_FILTER = 'Reddit filter';
 export type RemovalEntry = {
   id: string;
   redditId: string;
-  contentType: 'post';
+  contentType: 'post' | 'comment';
   title: string;
   authorName: string;
   modName: string;
@@ -34,6 +34,7 @@ export type WeeklyStats = {
   weekStart: number;
   weekEnd: number;
   postCount: number;
+  commentCount: number; // ← add this
 };
 
 export type InitResponse = {

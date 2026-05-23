@@ -17,24 +17,29 @@ async function apiFetch(path, options = {}) {
   return response.json();
 }
 
+const ORANGE = '#f97316';
+const ORANGE_DIM = 'rgba(249,115,22,0.18)';
+const ORANGE_BORDER = 'rgba(249,115,22,0.28)';
+const BG = '#0c0c0f';
+const SURFACE = 'rgba(255,255,255,0.04)';
+const SURFACE_HOVER = 'rgba(255,255,255,0.07)';
+const BORDER = 'rgba(255,255,255,0.07)';
+const TEXT_PRIMARY = '#f1f0ec';
+const TEXT_MUTED = '#6b6a66';
+const TEXT_SEC = '#9c9a92';
+
 const RULE_COLORS = [
-  { bg: 'rgba(249,115,22,0.15)', color: '#f97316', bar: '#f97316' },
-  { bg: 'rgba(239,68,68,0.15)', color: '#ef4444', bar: '#ef4444' },
-  { bg: 'rgba(168,85,247,0.15)', color: '#a855f7', bar: '#a855f7' },
-  { bg: 'rgba(59,130,246,0.15)', color: '#3b82f6', bar: '#3b82f6' },
-  { bg: 'rgba(16,185,129,0.15)', color: '#10b981', bar: '#10b981' },
-  { bg: 'rgba(234,179,8,0.15)', color: '#eab308', bar: '#eab308' },
+  '#f97316',
+  '#ef4444',
+  '#a855f7',
+  '#3b82f6',
+  '#10b981',
+  '#eab308',
+  '#ec4899',
+  '#06b6d4',
 ];
 
-const Icon = ({
-  d,
-  size = 16,
-  color = 'currentColor',
-  poly,
-  circle,
-  line,
-  rect,
-}) => (
+const Ic = ({ d, size = 16, color = 'currentColor', extra }) => (
   <svg
     width={size}
     height={size}
@@ -46,299 +51,457 @@ const Icon = ({
     strokeLinejoin="round"
   >
     {d && <path d={d} />}
-    {poly && poly.map((p, i) => <polyline key={i} points={p} />)}
-    {circle && circle.map((c, i) => <circle key={i} {...c} />)}
-    {line && line.map((l, i) => <line key={i} {...l} />)}
-    {rect && rect.map((r, i) => <rect key={i} {...r} />)}
+    {extra}
   </svg>
 );
 
-const IcHome = (p) => (
-  <Icon
-    {...p}
-    d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
-    poly={['9 22 9 12 15 12 15 22']}
-  />
-);
-const IcShield = (p) => (
-  <Icon {...p} d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-);
-const IcClock = (p) => (
-  <Icon
-    {...p}
-    circle={[{ cx: 12, cy: 12, r: 10 }]}
-    poly={['12 6 12 12 16 14']}
-  />
-);
 const IcTrash = (p) => (
-  <Icon
+  <Ic
     {...p}
-    poly={['3 6 5 6 21 6']}
-    d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"
+    d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"
   />
 );
-const IcFileText = (p) => (
-  <Icon
+const IcFile = (p) => (
+  <Ic
     {...p}
     d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-    poly={['14 2 14 8 20 8']}
-    line={[
-      { x1: 16, y1: 13, x2: 8, y2: 13 },
-      { x1: 16, y1: 17, x2: 8, y2: 17 },
-    ]}
+    extra={<polyline points="14 2 14 8 20 8" />}
   />
 );
-const IcCalendar = (p) => (
-  <Icon
+const IcMsg = (p) => (
+  <Ic
     {...p}
-    rect={[{ x: 3, y: 4, width: 18, height: 18, rx: 2, ry: 2 }]}
-    line={[
-      { x1: 16, y1: 2, x2: 16, y2: 6 },
-      { x1: 8, y1: 2, x2: 8, y2: 6 },
-      { x1: 3, y1: 10, x2: 21, y2: 10 },
-    ]}
+    d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
   />
 );
-const IcBarChart2 = (p) => (
-  <Icon
+const IcCal = (p) => (
+  <Ic
     {...p}
-    line={[
-      { x1: 18, y1: 20, x2: 18, y2: 10 },
-      { x1: 12, y1: 20, x2: 12, y2: 4 },
-      { x1: 6, y1: 20, x2: 6, y2: 14 },
-    ]}
+    extra={
+      <>
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </>
+    }
+  />
+);
+const IcBar = (p) => (
+  <Ic
+    {...p}
+    extra={
+      <>
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </>
+    }
   />
 );
 const IcMail = (p) => (
-  <Icon
+  <Ic
     {...p}
     d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
-    poly={['22,6 12,13 2,6']}
+    extra={<polyline points="22,6 12,13 2,6" />}
   />
 );
-const IcAlertTriangle = (p) => (
-  <Icon
+const IcWarn = (p) => (
+  <Ic
     {...p}
     d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-    line={[
-      { x1: 12, y1: 9, x2: 12, y2: 13 },
-      { x1: 12, y1: 17, x2: 12.01, y2: 17 },
-    ]}
-  />
-);
-const IcTarget = (p) => (
-  <Icon
-    {...p}
-    circle={[
-      { cx: 12, cy: 12, r: 10 },
-      { cx: 12, cy: 12, r: 6 },
-      { cx: 12, cy: 12, r: 2 },
-    ]}
+    extra={
+      <>
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </>
+    }
   />
 );
 const IcUser = (p) => (
-  <Icon
+  <Ic
     {...p}
     d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-    circle={[{ cx: 12, cy: 7, r: 4 }]}
+    extra={<circle cx="12" cy="7" r="4" />}
   />
 );
-const IcRefreshCw = (p) => (
-  <Icon
+const IcRefresh = (p) => (
+  <Ic
     {...p}
-    poly={['23 4 23 10 17 10', '1 20 1 14 7 14']}
     d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+    extra={
+      <>
+        <polyline points="23 4 23 10 17 10" />
+        <polyline points="1 20 1 14 7 14" />
+      </>
+    }
   />
 );
-const IcSun = (p) => (
-  <Icon
+const IcCheck = (p) => (
+  <Ic {...p} extra={<polyline points="4 12 9 17 20 6" />} />
+);
+const IcTarget = (p) => (
+  <Ic
     {...p}
-    circle={[{ cx: 12, cy: 12, r: 5 }]}
-    line={[
-      { x1: 12, y1: 1, x2: 12, y2: 3 },
-      { x1: 12, y1: 21, x2: 12, y2: 23 },
-      { x1: 4.22, y1: 4.22, x2: 5.64, y2: 5.64 },
-      { x1: 18.36, y1: 18.36, x2: 19.78, y2: 19.78 },
-      { x1: 1, y1: 12, x2: 3, y2: 12 },
-      { x1: 21, y1: 12, x2: 23, y2: 12 },
-      { x1: 4.22, y1: 19.78, x2: 5.64, y2: 18.36 },
-      { x1: 18.36, y1: 5.64, x2: 19.78, y2: 4.22 },
-    ]}
+    extra={
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </>
+    }
   />
 );
-const IcMoon = (p) => (
-  <Icon {...p} d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-);
-const IcMenu = (p) => (
-  <Icon
-    {...p}
-    line={[
-      { x1: 3, y1: 12, x2: 21, y2: 12 },
-      { x1: 3, y1: 6, x2: 21, y2: 6 },
-      { x1: 3, y1: 18, x2: 21, y2: 18 },
-    ]}
-  />
-);
-const IcClipboardList = (p) => (
-  <Icon
+const IcClip = (p) => (
+  <Ic
     {...p}
     d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0-2-2h-2"
-    rect={[{ x: 9, y: 3, width: 6, height: 4, rx: 2 }]}
-    line={[
-      { x1: 9, y1: 12, x2: 15, y2: 12 },
-      { x1: 9, y1: 16, x2: 13, y2: 16 },
-    ]}
+    extra={
+      <>
+        <rect x="9" y="3" width="6" height="4" rx="2" />
+        <line x1="9" y1="12" x2="15" y2="12" />
+        <line x1="9" y1="16" x2="13" y2="16" />
+      </>
+    }
   />
 );
-const IcCheckCircle = (p) => (
-  <Icon
+const IcX = (p) => (
+  <Ic
     {...p}
-    circle={[{ cx: 12, cy: 12, r: 10 }]}
-    poly={['9 12 11 14 15 10']}
+    extra={
+      <>
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </>
+    }
   />
 );
-const IcExternalLink = (p) => (
-  <Icon
-    {...p}
-    d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
-    poly={['12 3 21 3 21 12']}
-    line={[{ x1: 21, y1: 3, x2: 11, y2: 13 }]}
-  />
-);
-const IcCheck = (p) => <Icon {...p} poly={['4 12 9 17 20 6']} />;
 
-const BarChart = ({
-  data,
-  total,
-  accent = '#f97316',
-  colorized = false,
-  dark,
-  showAll = false,
-  colorMap = {},
-}) => {
-  const allSorted = Object.entries(data).sort((a, b) => b[1] - a[1]);
-  const sorted = showAll ? allSorted : allSorted.slice(0, 6);
-  if (!sorted.length)
+const DonutChart = ({ data, total }) => {
+  const entries = Object.entries(data)
+    .filter(([k]) => k !== REMOVAL_REASON_NONE)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  if (!entries.length || total === 0)
     return (
-      <p style={{ color: dark ? '#6b7280' : '#9ca3af', fontSize: 12 }}>
-        No data yet
+      <p
+        style={{
+          color: TEXT_MUTED,
+          fontSize: 12,
+          textAlign: 'center',
+          padding: '20px 0',
+        }}
+      >
+        No rule data yet
       </p>
     );
+  const cx = 80,
+    cy = 80,
+    r = 62,
+    strokeW = 20;
+  const circumference = 2 * Math.PI * r;
+  let cumulative = 0;
+  const slices = entries.map(([label, count], i) => {
+    const pct = count / total;
+    const offset = circumference * (1 - cumulative);
+    const dash = circumference * pct;
+    cumulative += pct;
+    return {
+      label,
+      count,
+      pct,
+      offset,
+      dash,
+      color: RULE_COLORS[i % RULE_COLORS.length],
+    };
+  });
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {sorted.map(([label, count]) => {
-        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-        const colorIndex =
-          colorized && colorMap[label] !== undefined ? colorMap[label] : 0;
-        const barColor = colorized
-          ? RULE_COLORS[colorIndex % RULE_COLORS.length].bar
-          : accent;
-        return (
-          <div key={label}>
-            <div
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ position: 'relative', flexShrink: 0 }}>
+        <svg width={160} height={160} viewBox="0 0 160 160">
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke="rgba(255,255,255,0.05)"
+            strokeWidth={strokeW}
+          />
+          {slices.map((s, i) => (
+            <circle
+              key={i}
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={strokeW}
+              strokeDasharray={`${s.dash} ${circumference - s.dash}`}
+              strokeDashoffset={s.offset}
+              strokeLinecap="butt"
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginBottom: 6,
-                alignItems: 'center',
+                transform: 'rotate(-90deg)',
+                transformOrigin: `${cx}px ${cy}px`,
+                transition: 'stroke-dasharray 0.6s cubic-bezier(0.16,1,0.3,1)',
               }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  maxWidth: '65%',
-                  minWidth: 0,
-                }}
-              >
-                {colorized && (
-                  <span
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      background: barColor,
-                      flexShrink: 0,
-                      display: 'inline-block',
-                    }}
-                  />
-                )}
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: dark ? '#d1d5db' : '#374151',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {label}
-                </span>
-              </div>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: dark ? '#9ca3af' : '#6b7280',
-                  fontVariantNumeric: 'tabular-nums',
-                  flexShrink: 0,
-                  marginLeft: 8,
-                }}
-              >
-                {count} · {pct}%
-              </span>
-            </div>
-            <div
+            />
+          ))}
+          <text
+            x={cx}
+            y={cy - 8}
+            textAnchor="middle"
+            fill={TEXT_PRIMARY}
+            fontSize={26}
+            fontWeight={800}
+            fontFamily="'DM Sans',sans-serif"
+          >
+            {total}
+          </text>
+          <text
+            x={cx}
+            y={cy + 14}
+            textAnchor="middle"
+            fill={TEXT_MUTED}
+            fontSize={10}
+            fontFamily="'DM Sans',sans-serif"
+            letterSpacing="0.08em"
+          >
+            TOTAL
+          </text>
+        </svg>
+      </div>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 120,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 7,
+        }}
+      >
+        {slices.map((s, i) => (
+          <div
+            key={i}
+            style={{ display: 'flex', alignItems: 'center', gap: 7 }}
+          >
+            <span
               style={{
-                height: 5,
-                background: dark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(0,0,0,0.06)',
-                borderRadius: 99,
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: s.color,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontSize: 11,
+                color: TEXT_SEC,
+                flex: 1,
                 overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              <div
-                style={{
-                  height: '100%',
-                  width: `${pct}%`,
-                  background: barColor,
-                  borderRadius: 99,
-                  transition: 'width 0.7s cubic-bezier(0.16,1,0.3,1)',
-                }}
-              />
-            </div>
+              {s.label}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                color: TEXT_MUTED,
+                fontVariantNumeric: 'tabular-nums',
+                flexShrink: 0,
+              }}
+            >
+              {Math.round(s.pct * 100)}%
+            </span>
           </div>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 };
 
-const KpiCard = ({ label, value, accent, icon, dark }) => (
+const DayChart = ({ data }) => {
+  const entries = Object.entries(data);
+  if (!entries.length)
+    return <p style={{ color: TEXT_MUTED, fontSize: 12 }}>No data yet</p>;
+  const max = Math.max(...entries.map((e) => e[1]), 1);
+  const chartH = 100;
+  return (
+    <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: 6,
+          minWidth: entries.length * 40,
+          height: chartH + 40,
+        }}
+      >
+        {entries.map(([label, count], i) => {
+          const barH = Math.max(4, (count / max) * chartH);
+          const shortLabel = label.length > 4 ? label.slice(0, 3) : label;
+          const isMax = count === max;
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 4,
+                flex: 1,
+                minWidth: 32,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  color: TEXT_MUTED,
+                  fontVariantNumeric: 'tabular-nums',
+                  fontWeight: 600,
+                  height: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                {count > 0 ? count : ''}
+              </span>
+              <div
+                style={{
+                  width: '100%',
+                  height: chartH,
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                }}
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: barH,
+                    background: isMax
+                      ? `linear-gradient(180deg, ${ORANGE} 0%, rgba(249,115,22,0.5) 100%)`
+                      : 'rgba(249,115,22,0.25)',
+                    borderRadius: '4px 4px 2px 2px',
+                    boxShadow: isMax ? `0 0 10px rgba(249,115,22,0.4)` : 'none',
+                    transition: 'height 0.6s cubic-bezier(0.16,1,0.3,1)',
+                  }}
+                />
+              </div>
+              <span
+                style={{
+                  fontSize: 10,
+                  color: isMax ? ORANGE : TEXT_MUTED,
+                  fontWeight: isMax ? 700 : 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {shortLabel}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const HBar = ({ label, count, total, color = ORANGE }) => {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginBottom: 5,
+          alignItems: 'center',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: TEXT_SEC,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: '68%',
+          }}
+        >
+          {label}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            color: TEXT_MUTED,
+            fontVariantNumeric: 'tabular-nums',
+            flexShrink: 0,
+            marginLeft: 8,
+          }}
+        >
+          {count} · {pct}%
+        </span>
+      </div>
+      <div
+        style={{
+          height: 4,
+          background: 'rgba(255,255,255,0.06)',
+          borderRadius: 99,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: `${pct}%`,
+            background: color,
+            borderRadius: 99,
+            transition: 'width 0.7s cubic-bezier(0.16,1,0.3,1)',
+            boxShadow: `0 0 8px ${color}66`,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+const KpiCard = ({ label, value, accent, icon }) => (
   <div
     style={{
-      background: dark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)',
-      border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)'}`,
-      borderRadius: 18,
-      padding: '16px 18px',
+      background: SURFACE,
+      border: `1px solid ${BORDER}`,
+      borderRadius: 16,
+      padding: '14px 16px',
       flex: '1 1 0',
       minWidth: 0,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: 12,
-      backdropFilter: 'blur(16px)',
-      boxShadow: dark
-        ? '0 2px 12px rgba(0,0,0,0.2)'
-        : '0 2px 12px rgba(0,0,0,0.06)',
+      gap: 10,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04)`,
     }}
   >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
       <div
         style={{
-          fontSize: 30,
+          fontSize: 28,
           fontWeight: 800,
           color: accent,
           letterSpacing: '-1.5px',
@@ -350,11 +513,11 @@ const KpiCard = ({ label, value, accent, icon, dark }) => (
       <div
         style={{
           fontSize: 10,
-          color: dark ? '#9ca3af' : '#6b7280',
+          color: TEXT_MUTED,
           textTransform: 'uppercase',
-          letterSpacing: '0.08em',
+          letterSpacing: '0.1em',
           fontWeight: 700,
-          marginTop: 2,
+          marginTop: 3,
         }}
       >
         {label}
@@ -362,10 +525,10 @@ const KpiCard = ({ label, value, accent, icon, dark }) => (
     </div>
     <div
       style={{
-        width: 42,
-        height: 42,
-        borderRadius: 12,
-        background: `${accent}1a`,
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        background: `${accent}18`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -377,17 +540,16 @@ const KpiCard = ({ label, value, accent, icon, dark }) => (
   </div>
 );
 
-const Card = ({ children, style, dark }) => (
+const Card = ({ children, style, glow }) => (
   <div
     style={{
-      background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.85)',
-      border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
-      borderRadius: 18,
-      padding: '18px 20px',
-      backdropFilter: 'blur(16px)',
-      boxShadow: dark
-        ? '0 2px 12px rgba(0,0,0,0.2)'
-        : '0 2px 12px rgba(0,0,0,0.05)',
+      background: SURFACE,
+      border: `1px solid ${glow ? ORANGE_BORDER : BORDER}`,
+      borderRadius: 16,
+      padding: '16px 18px',
+      boxShadow: glow
+        ? `0 0 20px rgba(249,115,22,0.08), inset 0 1px 0 rgba(255,255,255,0.04)`
+        : `inset 0 1px 0 rgba(255,255,255,0.03)`,
       ...style,
     }}
   >
@@ -395,31 +557,41 @@ const Card = ({ children, style, dark }) => (
   </div>
 );
 
-const SectionTitle = ({ children, dark }) => (
-  <p
+const SLabel = ({ children, action }) => (
+  <div
     style={{
-      fontSize: 10,
-      fontWeight: 700,
-      color: dark ? '#6b7280' : '#9ca3af',
-      textTransform: 'uppercase',
-      letterSpacing: '0.1em',
-      marginBottom: 14,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
     }}
   >
-    {children}
-  </p>
+    <p
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        color: TEXT_MUTED,
+        textTransform: 'uppercase',
+        letterSpacing: '0.1em',
+        margin: 0,
+      }}
+    >
+      {children}
+    </p>
+    {action}
+  </div>
 );
 
-const CardHeader = ({ icon, title, iconBg, dark }) => (
+const CardHead = ({ icon, title, accent = ORANGE_DIM }) => (
   <div
-    style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}
+    style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}
   >
     <div
       style={{
-        width: 30,
-        height: 30,
-        borderRadius: 9,
-        background: iconBg,
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        background: accent,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -428,44 +600,22 @@ const CardHeader = ({ icon, title, iconBg, dark }) => (
     >
       {icon}
     </div>
-    <SectionTitle dark={dark}>{title}</SectionTitle>
+    <p
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        color: TEXT_MUTED,
+        textTransform: 'uppercase',
+        letterSpacing: '0.1em',
+        margin: 0,
+      }}
+    >
+      {title}
+    </p>
   </div>
 );
 
-const RuleBadge = ({ label, index }) => {
-  const c = RULE_COLORS[index % RULE_COLORS.length];
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 5,
-        fontSize: 11,
-        fontWeight: 600,
-        background: c.bg,
-        color: c.color,
-        padding: '3px 10px',
-        borderRadius: 99,
-        whiteSpace: 'nowrap',
-        border: `1px solid ${c.color}22`,
-      }}
-    >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: c.color,
-          display: 'inline-block',
-        }}
-      />
-      {label}
-    </span>
-  );
-};
-
-// Posts only — always show post icon
-const RemovalRow = ({ entry, dark }) => {
+const RemovalRow = ({ entry }) => {
   const mins = Math.floor((Date.now() - entry.timestamp) / 60000);
   const timeAgo =
     mins < 1
@@ -475,50 +625,55 @@ const RemovalRow = ({ entry, dark }) => {
         : mins < 1440
           ? `${Math.floor(mins / 60)}h ago`
           : `${Math.floor(mins / 1440)}d ago`;
+  const isComment = entry.contentType === 'comment';
   const isNoReason = entry.removalReason === REMOVAL_REASON_NONE;
   return (
     <div
       style={{
         display: 'flex',
-        gap: 12,
+        gap: 11,
         padding: '10px 0',
-        borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+        borderBottom: `1px solid ${BORDER}`,
         alignItems: 'flex-start',
       }}
     >
       <div
         style={{
-          width: 34,
-          height: 34,
-          borderRadius: 10,
-          background: 'rgba(249,115,22,0.12)',
+          width: 32,
+          height: 32,
+          borderRadius: 9,
+          background: isComment ? 'rgba(168,85,247,0.12)' : ORANGE_DIM,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
         }}
       >
-        <IcFileText size={15} color="#f97316" />
+        {isComment ? (
+          <IcMsg size={14} color="#a855f7" />
+        ) : (
+          <IcFile size={14} color={ORANGE} />
+        )}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <p
           style={{
             fontSize: 13,
             fontWeight: 600,
-            color: dark ? '#e5e7eb' : '#111827',
+            color: TEXT_PRIMARY,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            marginBottom: 3,
+            marginBottom: 2,
           }}
         >
           {entry.title}
         </p>
-        <p style={{ fontSize: 11, color: dark ? '#6b7280' : '#9ca3af' }}>
+        <p style={{ fontSize: 11, color: TEXT_MUTED }}>
           u/{entry.authorName} ·{' '}
           <span
             style={{
-              color: isNoReason ? '#ef4444' : '#f97316',
+              color: isNoReason ? '#ef4444' : isComment ? '#a855f7' : ORANGE,
               fontWeight: 600,
             }}
           >
@@ -531,70 +686,50 @@ const RemovalRow = ({ entry, dark }) => {
   );
 };
 
-const NavItem = ({ icon, label, active, onClick, dark }) => (
+const NavPill = ({ label, active, onClick }) => (
   <button
     onClick={onClick}
     style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      width: '100%',
-      padding: '9px 12px',
-      borderRadius: 10,
-      border: 'none',
-      background: active
-        ? dark
-          ? 'rgba(249,115,22,0.15)'
-          : 'rgba(249,115,22,0.1)'
-        : 'transparent',
-      color: active ? '#f97316' : dark ? '#9ca3af' : '#6b7280',
+      fontSize: 12,
       fontWeight: active ? 700 : 500,
-      fontSize: 13,
+      color: active ? '#0c0c0f' : TEXT_SEC,
+      background: active ? ORANGE : 'transparent',
+      border: 'none',
+      borderRadius: 99,
+      padding: '5px 14px',
       cursor: 'pointer',
-      textAlign: 'left',
       transition: 'all 0.15s',
       fontFamily: 'inherit',
+      boxShadow: active ? `0 0 12px rgba(249,115,22,0.5)` : 'none',
     }}
   >
-    {icon}
-    <span>{label}</span>
-    {active && (
-      <span
-        style={{
-          marginLeft: 'auto',
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: '#f97316',
-        }}
-      />
-    )}
+    {label}
   </button>
 );
 
-const ConfirmModal = ({ onConfirm, onCancel, dark }) => (
+const ConfirmModal = ({ onConfirm, onCancel }) => (
   <div
     style={{
       position: 'fixed',
       inset: 0,
       zIndex: 100,
-      background: 'rgba(0,0,0,0.6)',
+      background: 'rgba(0,0,0,0.75)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: 24,
-      backdropFilter: 'blur(4px)',
+      backdropFilter: 'blur(6px)',
     }}
   >
     <div
       style={{
-        background: dark ? '#1a1a2e' : '#ffffff',
-        border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+        background: '#13131a',
+        border: `1px solid ${BORDER}`,
         borderRadius: 20,
         padding: 28,
-        maxWidth: 340,
+        maxWidth: 320,
         width: '100%',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
       }}
     >
       <div
@@ -602,13 +737,13 @@ const ConfirmModal = ({ onConfirm, onCancel, dark }) => (
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          marginBottom: 12,
+          marginBottom: 10,
         }}
       >
         <div
           style={{
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             borderRadius: 10,
             background: 'rgba(239,68,68,0.12)',
             display: 'flex',
@@ -616,23 +751,17 @@ const ConfirmModal = ({ onConfirm, onCancel, dark }) => (
             justifyContent: 'center',
           }}
         >
-          <IcAlertTriangle size={18} color="#ef4444" />
+          <IcWarn size={16} color="#ef4444" />
         </div>
-        <p
-          style={{
-            fontSize: 17,
-            fontWeight: 800,
-            color: dark ? '#f9fafb' : '#111827',
-          }}
-        >
+        <p style={{ fontSize: 16, fontWeight: 800, color: TEXT_PRIMARY }}>
           Clear this week?
         </p>
       </div>
       <p
         style={{
           fontSize: 13,
-          color: dark ? '#9ca3af' : '#6b7280',
-          marginBottom: 24,
+          color: TEXT_MUTED,
+          marginBottom: 22,
           lineHeight: 1.6,
         }}
       >
@@ -646,9 +775,9 @@ const ConfirmModal = ({ onConfirm, onCancel, dark }) => (
             flex: 1,
             padding: '11px 0',
             borderRadius: 12,
-            background: dark ? 'rgba(255,255,255,0.06)' : '#f3f4f6',
-            border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-            color: dark ? '#d1d5db' : '#374151',
+            background: SURFACE_HOVER,
+            border: `1px solid ${BORDER}`,
+            color: TEXT_SEC,
             fontSize: 13,
             fontWeight: 600,
             cursor: 'pointer',
@@ -679,91 +808,51 @@ const ConfirmModal = ({ onConfirm, onCancel, dark }) => (
   </div>
 );
 
-const EmptyState = ({ dark }) => (
-  <div style={{ textAlign: 'center', padding: '64px 24px' }}>
-    <div
-      style={{
-        width: 56,
-        height: 56,
-        borderRadius: 16,
-        background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        margin: '0 auto 20px',
-      }}
-    >
-      <IcClipboardList size={26} color={dark ? '#6b7280' : '#9ca3af'} />
-    </div>
-    <p
-      style={{
-        fontSize: 18,
-        fontWeight: 800,
-        color: dark ? '#e5e7eb' : '#111827',
-        marginBottom: 8,
-      }}
-    >
-      No posts removed yet this week
-    </p>
-    <p
-      style={{
-        fontSize: 13,
-        color: dark ? '#6b7280' : '#9ca3af',
-        lineHeight: 1.7,
-        maxWidth: 280,
-        margin: '0 auto',
-      }}
-    >
-      ModStat automatically tracks every post removal.
-    </p>
-  </div>
-);
-
-const LastUpdated = ({ ts }) => {
-  const mins = Math.floor((Date.now() - ts) / 60000);
-  return (
-    <span
-      style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}
-    >
-      Updated {mins < 1 ? 'just now' : `${mins}m ago`}
-    </span>
-  );
-};
-
-const DigestSuccessBanner = ({ postUrl, dark, onDismiss }) => (
+const Spinner = ({ size = 14 }) => (
   <div
     style={{
-      background: dark ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)',
-      border: '1px solid rgba(16,185,129,0.25)',
-      borderRadius: 14,
-      padding: '14px 16px',
-      marginTop: 12,
-      animation: 'fadeUp 0.3s ease',
+      width: size,
+      height: size,
+      border: `2px solid rgba(249,115,22,0.25)`,
+      borderTop: `2px solid ${ORANGE}`,
+      borderRadius: '50%',
+      animation: 'spin 0.7s linear infinite',
+      flexShrink: 0,
+    }}
+  />
+);
+
+const DigestBanner = ({ onDismiss }) => (
+  <div
+    style={{
+      background: 'rgba(16,185,129,0.07)',
+      border: '1px solid rgba(16,185,129,0.2)',
+      borderRadius: 12,
+      padding: '12px 14px',
+      marginTop: 10,
     }}
   >
     <div
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
         justifyContent: 'space-between',
-        gap: 10,
-        marginBottom: 12,
+        alignItems: 'flex-start',
+        marginBottom: 6,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
         <div
           style={{
-            width: 28,
-            height: 28,
-            borderRadius: 8,
+            width: 24,
+            height: 24,
+            borderRadius: 7,
             background: 'rgba(16,185,129,0.15)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexShrink: 0,
           }}
         >
-          <IcCheck size={14} color="#10b981" />
+          <IcCheck size={12} color="#10b981" />
         </div>
         <div>
           <p
@@ -777,14 +866,9 @@ const DigestSuccessBanner = ({ postUrl, dark, onDismiss }) => (
             Sent to Mod Discussions!
           </p>
           <p
-            style={{
-              fontSize: 11,
-              color: dark ? '#9ca3af' : '#6b7280',
-              margin: 0,
-              marginTop: 1,
-            }}
+            style={{ fontSize: 10, color: TEXT_MUTED, margin: 0, marginTop: 1 }}
           >
-            Only visible to mods — not public
+            Only visible to mods
           </p>
         </div>
       </div>
@@ -794,52 +878,16 @@ const DigestSuccessBanner = ({ postUrl, dark, onDismiss }) => (
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          color: dark ? '#6b7280' : '#9ca3af',
-          fontSize: 18,
-          lineHeight: 1,
-          padding: '2px 6px',
-          borderRadius: 6,
+          padding: '2px 4px',
+          borderRadius: 5,
         }}
       >
-        ×
+        <IcX size={12} color={TEXT_MUTED} />
       </button>
     </div>
-    {postUrl ? (
-      <a
-        href={postUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-          fontSize: 12,
-          fontWeight: 700,
-          color: '#fff',
-          background: '#10b981',
-          padding: '9px 14px',
-          borderRadius: 10,
-          textDecoration: 'none',
-          width: '100%',
-          boxSizing: 'border-box',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = '#059669')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = '#10b981')}
-      >
-        <IcExternalLink size={12} color="#fff" /> Open in Modmail
-      </a>
-    ) : (
-      <p
-        style={{
-          fontSize: 11,
-          color: dark ? '#9ca3af' : '#6b7280',
-          textAlign: 'center',
-        }}
-      >
-        Sent — check Mod Discussions in modmail.
-      </p>
-    )}
+    <p style={{ fontSize: 11, color: TEXT_MUTED, textAlign: 'center' }}>
+      Check Mod Discussions in modmail.
+    </p>
   </div>
 );
 
@@ -856,10 +904,8 @@ export const App = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [clearMsg, setClearMsg] = useState('');
   const [lastUpdated, setLastUpdated] = useState(Date.now());
-  const [dark, setDark] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showAllReasons, setShowAllReasons] = useState(false);
   const [isMod, setIsMod] = useState(false);
+  const [showAllReasons, setShowAllReasons] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -891,11 +937,11 @@ export const App = () => {
     setDigestResult(null);
     try {
       const r = await apiFetch('/generate-digest', { method: 'POST' });
-      if (!r.success) {
-        setDigestResult({ error: r.message ?? 'Failed to post digest' });
-        return;
-      }
-      setDigestResult({ postUrl: r.modmailUrl ?? null, error: null });
+      setDigestResult(
+        !r.success
+          ? { error: r.message ?? 'Failed' }
+          : { postUrl: r.modmailUrl ?? null, error: null }
+      );
     } catch (e) {
       setDigestResult({ error: e?.message ?? 'Failed to generate digest' });
     } finally {
@@ -917,40 +963,75 @@ export const App = () => {
       setClearLoading(false);
     }
   }, [loadData]);
+
   if (!loading && !isMod) {
     return (
       <div
         style={{
-          minHeight: '100vh',
+          position: 'fixed',
+          inset: 0,
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#0d0d1a',
-          color: '#fff',
+          background:
+            'radial-gradient(circle at top, #111827 0%, #050505 45%, #000000 100%)',
           fontFamily: "'DM Sans', sans-serif",
-          padding: 24,
-          textAlign: 'center',
         }}
       >
-        <div>
-          <div style={{ fontSize: 72, marginBottom: 16 }}>🐰</div>
-
-          <h1
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '32px 24px',
+            borderRadius: 28,
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 0 40px rgba(255, 69, 0, 0.08)',
+            maxWidth: 360,
+            width: '90%',
+          }}
+        >
+          <img
+            src="/deny.png"
+            alt="Access Denied"
             style={{
-              fontSize: 28,
+              width: 180,
+              height: 'auto',
+              marginBottom: 24,
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 0 20px rgba(255,69,0,0.18))',
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <h2
+            style={{
+              color: '#ef4444',
+              fontSize: 24,
               fontWeight: 800,
+              margin: 0,
               marginBottom: 10,
+              letterSpacing: '-0.03em',
             }}
           >
-            ModStat
-          </h1>
+            Access Restricted
+          </h2>
 
           <p
             style={{
-              color: '#9ca3af',
+              color: 'rgba(255,255,255,0.58)',
               fontSize: 14,
-              lineHeight: 1.6,
-              maxWidth: 320,
+              lineHeight: 1.7,
+              textAlign: 'center',
+              margin: 0,
+              maxWidth: 280,
             }}
           >
             This dashboard is only available to subreddit moderators.
@@ -959,6 +1040,7 @@ export const App = () => {
       </div>
     );
   }
+
   const busiestDay = stats
     ? Object.entries(stats.byDay).sort((a, b) => b[1] - a[1])[0]
     : null;
@@ -967,607 +1049,459 @@ export const App = () => {
         .filter(([r]) => r !== REMOVAL_REASON_NONE)
         .sort((a, b) => b[1] - a[1])[0]
     : null;
-  const ruleKeys = stats
-    ? Object.keys(stats.byReason).filter((r) => r !== REMOVAL_REASON_NONE)
-    : [];
-  const reasonColorMap = stats
-    ? Object.fromEntries(Object.keys(stats.byReason).map((key, i) => [key, i]))
-    : {};
-
-  const textPrimary = dark ? '#f9fafb' : '#111827';
-  const textMuted = dark ? '#9ca3af' : '#6b7280';
-  const borderColor = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
-  const bgGradient = dark
-    ? 'radial-gradient(ellipse at 20% 0%, rgba(234,88,12,0.18) 0%, transparent 55%), radial-gradient(ellipse at 80% 100%, rgba(168,85,247,0.15) 0%, transparent 55%), radial-gradient(ellipse at 60% 40%, rgba(59,130,246,0.1) 0%, transparent 50%), #0d0d1a'
-    : 'radial-gradient(ellipse at 20% 0%, rgba(234,88,12,0.1) 0%, transparent 55%), radial-gradient(ellipse at 80% 100%, rgba(168,85,247,0.08) 0%, transparent 55%), radial-gradient(ellipse at 60% 40%, rgba(59,130,246,0.06) 0%, transparent 50%), #f0f1f4';
-  const sideBg = dark ? 'rgba(13,13,26,0.97)' : 'rgba(255,255,255,0.97)';
+  const reasonEntries = stats ? Object.entries(stats.byReason) : [];
+  const visibleReasons = showAllReasons
+    ? reasonEntries
+    : reasonEntries.slice(0, 6);
+  const nowMins = Math.floor((Date.now() - lastUpdated) / 60000);
+  const updatedLabel = nowMins < 1 ? 'just now' : `${nowMins}m ago`;
 
   return (
     <div
       style={{
         minHeight: '100vh',
-        background: bgGradient,
-        color: textPrimary,
+        background: BG,
+        color: TEXT_PRIMARY,
         fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
         display: 'flex',
-        position: 'relative',
+        flexDirection: 'column',
       }}
     >
       {showConfirm && (
         <ConfirmModal
           onConfirm={clearWeek}
           onCancel={() => setShowConfirm(false)}
-          dark={dark}
         />
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        ::-webkit-scrollbar { width: 3px; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 3px; height: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.15); border-radius: 99px; }
-        .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 49; backdrop-filter: blur(2px); }
-        .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .two-col-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        @media (max-width: 640px) {
-          .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-          .two-col-grid { grid-template-columns: 1fr; gap: 10px; }
-          .header-title { font-size: 17px !important; }
-          .content-pad { padding: 14px 12px 40px !important; }
-        }
-        @media (min-width: 1024px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+        ::-webkit-scrollbar-thumb { background: rgba(249,115,22,0.2); border-radius: 99px; }
+        .action-btn:hover { background: rgba(255,255,255,0.1) !important; }
         button { font-family: inherit; }
+        @media (max-width: 480px) {
+          .kpi-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+          .two-col { grid-template-columns: 1fr !important; }
+          .body-pad { padding: 14px 12px 80px !important; }
+        }
+        @media (min-width: 900px) {
+          .kpi-grid { grid-template-columns: repeat(4,1fr) !important; }
+        }
       `}</style>
 
-      {sidebarOpen && (
-        <div
-          className="sidebar-overlay"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div
-        style={{
-          width: 220,
-          background: sideBg,
-          borderRight: `1px solid ${borderColor}`,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '20px 12px',
-          gap: 4,
-          flexShrink: 0,
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          height: '100vh',
-          overflowY: 'auto',
-          zIndex: 50,
-          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.25s cubic-bezier(0.16,1,0.3,1)',
-          backdropFilter: 'blur(20px)',
-        }}
-      >
+      {/* ── Header ── */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 40 }}>
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '4px 8px 20px',
+            background: `linear-gradient(135deg, #1a0a00 0%, #110a18 60%, #0c0c0f 100%)`,
+            borderBottom: `1px solid ${BORDER}`,
+            padding: '14px 16px 0',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
+          {/* orange glow blob */}
           <div
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg,#ea580c,#f97316)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <IcBarChart2 size={16} color="#fff" />
-          </div>
-          <span
-            style={{
-              fontWeight: 800,
-              fontSize: 15,
-              color: textPrimary,
-              letterSpacing: '-0.3px',
-            }}
-          >
-            modswift25
-          </span>
-        </div>
-        <div
-          style={{
-            padding: '0 8px 8px',
-            fontSize: 10,
-            fontWeight: 700,
-            color: textMuted,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-          }}
-        >
-          ModStat
-        </div>
-        <NavItem
-          icon={
-            <IcHome
-              size={15}
-              color={tab === 'overview' ? '#f97316' : textMuted}
-            />
-          }
-          label="Overview"
-          active={tab === 'overview'}
-          onClick={() => {
-            setTab('overview');
-            setSidebarOpen(false);
-          }}
-          dark={dark}
-        />
-        <NavItem
-          icon={
-            <IcShield
-              size={15}
-              color={tab === 'reasons' ? '#f97316' : textMuted}
-            />
-          }
-          label="Reasons"
-          active={tab === 'reasons'}
-          onClick={() => {
-            setTab('reasons');
-            setSidebarOpen(false);
-          }}
-          dark={dark}
-        />
-        <NavItem
-          icon={
-            <IcClock
-              size={15}
-              color={tab === 'recent' ? '#f97316' : textMuted}
-            />
-          }
-          label="Recent"
-          active={tab === 'recent'}
-          onClick={() => {
-            setTab('recent');
-            setSidebarOpen(false);
-          }}
-          dark={dark}
-        />
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => setDark(!dark)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '9px 12px',
-            borderRadius: 10,
-            border: 'none',
-            background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-            color: textMuted,
-            fontWeight: 600,
-            fontSize: 12,
-            cursor: 'pointer',
-            width: '100%',
-          }}
-        >
-          {dark ? (
-            <IcSun size={14} color={textMuted} />
-          ) : (
-            <IcMoon size={14} color={textMuted} />
-          )}
-          {dark ? 'Light Mode' : 'Dark Mode'}
-        </button>
-      </div>
-
-      {/* Main */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          minWidth: 0,
-          width: '100%',
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 40,
-            backdropFilter: 'blur(16px)',
-          }}
-        >
-          <div
-            style={{
+              position: 'absolute',
+              top: -40,
+              left: -20,
+              width: 200,
+              height: 160,
               background:
-                'linear-gradient(135deg, #ea580c 0%, #f97316 50%, #a855f7 100%)',
-              padding: '14px 16px 0',
-              position: 'relative',
-              overflow: 'hidden',
+                'radial-gradient(ellipse, rgba(249,115,22,0.25) 0%, transparent 70%)',
+              pointerEvents: 'none',
             }}
-          >
+          />
+
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            {/* Top row: logo+name LEFT — updated badge + refresh RIGHT */}
             <div
               style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundImage:
-                  'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.1) 0%, transparent 55%)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
               }}
-            />
-            <div style={{ position: 'relative', zIndex: 1 }}>
+            >
+              {/* Left: logo + title + subtitle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    background: `linear-gradient(135deg,#ea580c,${ORANGE})`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: `0 0 16px rgba(249,115,22,0.45)`,
+                    flexShrink: 0,
+                  }}
+                >
+                  <IcBar size={16} color="#fff" />
+                </div>
+                <div>
+                  <h1
+                    style={{
+                      fontSize: 17,
+                      fontWeight: 800,
+                      color: TEXT_PRIMARY,
+                      letterSpacing: '-0.5px',
+                      margin: 0,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    ModStat
+                  </h1>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: TEXT_MUTED,
+                      margin: 0,
+                      marginTop: 1,
+                    }}
+                  >
+                    {loading ? 'Loading…' : `This week · u/${username}`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right: updated badge + refresh button */}
               <div
                 style={{
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  marginBottom: 12,
+                  gap: 8,
+                  flexShrink: 0,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                {!loading && (
+                  <span
                     style={{
-                      background: 'rgba(255,255,255,0.2)',
-                      border: 'none',
-                      borderRadius: 8,
-                      padding: '7px 8px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      background: 'rgba(249,115,22,0.15)',
+                      borderRadius: 99,
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      color: ORANGE,
+                      fontWeight: 600,
+                      border: `1px solid rgba(249,115,22,0.25)`,
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <IcMenu size={15} color="#fff" />
-                  </button>
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 10,
-                      background: 'rgba(255,255,255,0.2)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <IcBarChart2 size={18} color="#fff" />
-                  </div>
-                  <div>
-                    <h1
-                      className="header-title"
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 800,
-                        color: '#fff',
-                        letterSpacing: '-0.5px',
-                        margin: 0,
-                      }}
-                    >
-                      ModStat
-                    </h1>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        marginTop: 1,
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: 'rgba(255,255,255,0.8)',
-                          margin: 0,
-                        }}
-                      >
-                        {loading ? 'Loading…' : `This week · u/${username}`}
-                      </p>
-                      {!loading && (
-                        <span
-                          style={{
-                            background: 'rgba(255,255,255,0.2)',
-                            borderRadius: 99,
-                            padding: '1px 7px',
-                            fontSize: 10,
-                            color: '#fff',
-                            fontWeight: 600,
-                          }}
-                        >
-                          <LastUpdated ts={lastUpdated} />
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                    {updatedLabel}
+                  </span>
+                )}
                 <button
                   onClick={loadData}
+                  className="action-btn"
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
-                    background: 'rgba(255,255,255,0.2)',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    color: '#fff',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: `1px solid ${BORDER}`,
+                    color: TEXT_SEC,
                     borderRadius: 99,
                     padding: '6px 12px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 5,
-                    backdropFilter: 'blur(4px)',
-                    flexShrink: 0,
+                    transition: 'all 0.15s',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <IcRefreshCw size={11} color="#fff" /> Refresh
+                  <IcRefresh size={11} color={TEXT_SEC} /> Refresh
                 </button>
               </div>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 2,
-                  background: 'rgba(0,0,0,0.2)',
-                  borderRadius: 99,
-                  padding: 3,
-                  width: 'fit-content',
-                }}
-              >
-                {['overview', 'reasons', 'recent'].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    style={{
-                      fontSize: 12,
-                      fontWeight: t === tab ? 700 : 500,
-                      color: t === tab ? '#111827' : 'rgba(255,255,255,0.8)',
-                      background: t === tab ? '#ffffff' : 'transparent',
-                      border: 'none',
-                      borderRadius: 99,
-                      padding: '5px 14px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {t.charAt(0).toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
-              </div>
-              <div style={{ height: 12 }} />
             </div>
-          </div>
-        </div>
 
-        {/* Body */}
-        <div
-          className="content-pad"
-          style={{
-            flex: 1,
-            padding: '18px 16px 48px',
-            maxWidth: 1200,
-            width: '100%',
-            margin: '0 auto',
-            animation: 'fadeUp 0.3s ease',
-          }}
-        >
-          {loading ? (
+            {/* Tab pills */}
             <div
               style={{
                 display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingTop: 80,
-                gap: 16,
+                gap: 2,
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: 99,
+                padding: 3,
+                width: 'fit-content',
+                border: `1px solid ${BORDER}`,
               }}
             >
-              <div
-                style={{
-                  width: 34,
-                  height: 34,
-                  border: '3px solid rgba(249,115,22,0.2)',
-                  borderTop: '3px solid #f97316',
-                  borderRadius: '50%',
-                  animation: 'spin 0.8s linear infinite',
-                }}
-              />
-              <p style={{ fontSize: 13, color: textMuted }}>Loading stats…</p>
+              {['overview', 'reasons', 'recent'].map((t) => (
+                <NavPill
+                  key={t}
+                  label={t.charAt(0).toUpperCase() + t.slice(1)}
+                  active={tab === t}
+                  onClick={() => setTab(t)}
+                />
+              ))}
             </div>
-          ) : error ? (
-            <div style={{ textAlign: 'center', paddingTop: 80 }}>
-              <p style={{ color: '#ef4444', fontSize: 14 }}>{error}</p>
-              <button
-                onClick={loadData}
-                style={{
-                  marginTop: 12,
-                  fontSize: 13,
-                  color: '#f97316',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                Try again
-              </button>
-            </div>
-          ) : !stats ? null : stats.totalRemovals === 0 &&
-            tab === 'overview' ? (
-            <EmptyState dark={dark} />
-          ) : (
-            <>
-              {tab === 'overview' && (
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-                >
-                  <div className="kpi-grid">
-                    <KpiCard
-                      label="Removals"
-                      value={stats.totalRemovals}
-                      accent="#f97316"
-                      icon={<IcTrash size={18} color="#f97316" />}
-                      dark={dark}
-                    />
-                    <KpiCard
-                      label="Posts"
-                      value={stats.postCount}
-                      accent="#3b82f6"
-                      icon={<IcFileText size={18} color="#3b82f6" />}
-                      dark={dark}
-                    />
-                    <KpiCard
-                      label="Busiest Day"
-                      value={busiestDay?.[0]?.slice(0, 3) ?? '—'}
-                      accent="#10b981"
-                      icon={<IcCalendar size={18} color="#10b981" />}
-                      dark={dark}
-                    />
-                  </div>
+            <div style={{ height: 12 }} />
+          </div>
+        </div>
+      </div>
 
-                  <div className="two-col-grid">
-                    {topReason && (
-                      <Card
-                        dark={dark}
+      {/* ── Body ── */}
+      <div
+        className="body-pad"
+        style={{
+          flex: 1,
+          padding: '16px 16px 48px',
+          maxWidth: 960,
+          width: '100%',
+          margin: '0 auto',
+          animation: 'fadeUp 0.35s ease both',
+        }}
+      >
+        {loading ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingTop: 80,
+              gap: 14,
+            }}
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                border: `2px solid rgba(249,115,22,0.15)`,
+                borderTop: `2px solid ${ORANGE}`,
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+                boxShadow: `0 0 16px rgba(249,115,22,0.2)`,
+              }}
+            />
+            <p style={{ fontSize: 13, color: TEXT_MUTED }}>Loading stats…</p>
+          </div>
+        ) : error ? (
+          <div style={{ textAlign: 'center', paddingTop: 80 }}>
+            <p style={{ color: '#ef4444', fontSize: 14 }}>{error}</p>
+            <button
+              onClick={loadData}
+              style={{
+                marginTop: 12,
+                fontSize: 13,
+                color: ORANGE,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        ) : !stats ? null : (
+          <>
+            {/* OVERVIEW */}
+            {tab === 'overview' && (
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+              >
+                <div
+                  className="kpi-grid"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2,1fr)',
+                    gap: 10,
+                  }}
+                >
+                  <KpiCard
+                    label="Removals"
+                    value={stats.totalRemovals}
+                    accent={ORANGE}
+                    icon={<IcTrash size={17} color={ORANGE} />}
+                  />
+                  <KpiCard
+                    label="Posts"
+                    value={stats.postCount ?? 0}
+                    accent="#3b82f6"
+                    icon={<IcFile size={17} color="#3b82f6" />}
+                  />
+                  <KpiCard
+                    label="Comments"
+                    value={stats.commentCount ?? 0}
+                    accent="#a855f7"
+                    icon={<IcMsg size={17} color="#a855f7" />}
+                  />
+                  <KpiCard
+                    label="Busiest Day"
+                    value={busiestDay?.[0]?.slice(0, 3) ?? '—'}
+                    accent="#10b981"
+                    icon={<IcCal size={17} color="#10b981" />}
+                  />
+                </div>
+
+                {Object.keys(stats.byDay).length > 0 && (
+                  <Card glow>
+                    <CardHead
+                      icon={<IcBar size={13} color={ORANGE} />}
+                      title="Removals by Day"
+                    />
+                    <DayChart data={stats.byDay} />
+                  </Card>
+                )}
+
+                <div
+                  className="two-col"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: 12,
+                  }}
+                >
+                  <Card>
+                    <CardHead
+                      icon={<IcTarget size={13} color={ORANGE} />}
+                      title="By Rule"
+                    />
+                    <DonutChart
+                      data={stats.byReason}
+                      total={stats.totalRemovals}
+                    />
+                  </Card>
+                  {stats.topOffenders.length > 0 ? (
+                    <Card>
+                      <CardHead
+                        icon={<IcUser size={13} color="#ef4444" />}
+                        title={`Repeat Offenders (${stats.topOffenders.length})`}
+                        accent="rgba(239,68,68,0.12)"
+                      />
+                      <div
                         style={{
-                          background: dark
-                            ? 'rgba(249,115,22,0.06)'
-                            : 'rgba(249,115,22,0.04)',
-                          borderColor: 'rgba(249,115,22,0.2)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
                         }}
                       >
-                        <CardHeader
-                          icon={<IcTarget size={14} color="#f97316" />}
-                          title="Most Cited Rule"
-                          iconBg="rgba(249,115,22,0.15)"
-                          dark={dark}
-                        />
-                        <p
-                          style={{
-                            fontSize: 15,
-                            fontWeight: 800,
-                            color: dark ? '#fed7aa' : '#ea580c',
-                            marginBottom: 4,
-                            letterSpacing: '-0.3px',
-                          }}
-                        >
-                          {topReason[0]}
-                        </p>
-                        <p
-                          style={{
-                            fontSize: 11,
-                            color: '#fb923c',
-                            fontWeight: 600,
-                          }}
-                        >
-                          {topReason[1]} of {stats.totalRemovals} removals (
-                          {Math.round(
-                            (topReason[1] / stats.totalRemovals) * 100
-                          )}
-                          %)
-                        </p>
-                      </Card>
-                    )}
-                    {stats.topOffenders.length > 0 && (
-                      <Card dark={dark}>
-                        <CardHeader
-                          icon={<IcUser size={14} color="#ef4444" />}
-                          title={`Repeat Offenders (${stats.topOffenders.length})`}
-                          iconBg="rgba(239,68,68,0.12)"
-                          dark={dark}
-                        />
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 7,
-                          }}
-                        >
-                          {stats.topOffenders.map((o, i) => (
-                            <div
-                              key={o.username}
+                        {stats.topOffenders.map((o, i) => (
+                          <div
+                            key={o.username}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <span
                               style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
+                                fontSize: 12,
+                                color: TEXT_SEC,
+                                fontWeight: 500,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                flex: 1,
+                                minWidth: 0,
+                                marginRight: 8,
                               }}
                             >
-                              <span
-                                style={{
-                                  fontSize: 12,
-                                  color: dark ? '#d1d5db' : '#374151',
-                                  fontWeight: 500,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                  flex: 1,
-                                  minWidth: 0,
-                                  marginRight: 8,
-                                }}
-                              >
-                                {i + 1}. u/{o.username}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  background: 'rgba(239,68,68,0.12)',
-                                  color: '#ef4444',
-                                  padding: '2px 9px',
-                                  borderRadius: 99,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {o.count}x
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </Card>
-                    )}
-                  </div>
-
-                  {Object.keys(stats.byMod).length > 0 && (
-                    <Card dark={dark}>
-                      <CardHeader
-                        icon={<IcBarChart2 size={14} color="#3b82f6" />}
-                        title="Mod Activity"
-                        iconBg="rgba(59,130,246,0.12)"
-                        dark={dark}
-                      />
-                      <BarChart
-                        data={stats.byMod}
-                        total={stats.totalRemovals}
-                        accent="#3b82f6"
-                        dark={dark}
-                      />
+                              {i + 1}. u/{o.username}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: 'rgba(239,68,68,0.12)',
+                                color: '#ef4444',
+                                padding: '2px 9px',
+                                borderRadius: 99,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {o.count}x
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </Card>
-                  )}
+                  ) : topReason ? (
+                    <Card glow>
+                      <CardHead
+                        icon={<IcTarget size={13} color={ORANGE} />}
+                        title="Most Cited Rule"
+                      />
+                      <p
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 800,
+                          color: ORANGE,
+                          marginBottom: 4,
+                          letterSpacing: '-0.3px',
+                        }}
+                      >
+                        {topReason[0]}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: TEXT_MUTED,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {topReason[1]} of {stats.totalRemovals} (
+                        {Math.round((topReason[1] / stats.totalRemovals) * 100)}
+                        %)
+                      </p>
+                    </Card>
+                  ) : null}
+                </div>
 
-                  <div className="two-col-grid">
-                    <Card dark={dark}>
-                      <CardHeader
-                        icon={<IcMail size={14} color="#f97316" />}
+                {Object.keys(stats.byMod).length > 0 && (
+                  <Card>
+                    <CardHead
+                      icon={<IcBar size={13} color="#3b82f6" />}
+                      title="Mod Activity"
+                      accent="rgba(59,130,246,0.12)"
+                    />
+                    {Object.entries(stats.byMod)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([mod, count]) => (
+                        <HBar
+                          key={mod}
+                          label={mod}
+                          count={count}
+                          total={stats.totalRemovals}
+                          color="#3b82f6"
+                        />
+                      ))}
+                  </Card>
+                )}
+
+                {isMod && (
+                  <div
+                    className="two-col"
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 12,
+                    }}
+                  >
+                    <Card>
+                      <CardHead
+                        icon={<IcMail size={13} color={ORANGE} />}
                         title="Weekly Digest"
-                        iconBg="rgba(249,115,22,0.12)"
-                        dark={dark}
                       />
                       {!digestResult && (
                         <p
                           style={{
                             fontSize: 12,
-                            color: textMuted,
+                            color: TEXT_MUTED,
                             marginBottom: 14,
                             lineHeight: 1.6,
                           }}
                         >
-                          Post this week's stats as a mod-only sticky.
+                          Send this week's stats to Mod Discussions.
                         </p>
                       )}
                       {(!digestResult || digestResult.error) && (
@@ -1576,13 +1510,13 @@ export const App = () => {
                           disabled={digestLoading || stats.totalRemovals === 0}
                           style={{
                             width: '100%',
-                            padding: '11px 0',
+                            padding: '10px 0',
                             background:
                               stats.totalRemovals === 0
-                                ? 'rgba(249,115,22,0.3)'
-                                : 'linear-gradient(135deg,#ea580c,#f97316,#a855f7)',
+                                ? 'rgba(249,115,22,0.2)'
+                                : `linear-gradient(135deg,#ea580c,${ORANGE})`,
                             border: 'none',
-                            borderRadius: 12,
+                            borderRadius: 11,
                             color: '#fff',
                             fontSize: 13,
                             fontWeight: 800,
@@ -1595,21 +1529,15 @@ export const App = () => {
                             justifyContent: 'center',
                             gap: 7,
                             opacity: digestLoading ? 0.7 : 1,
+                            boxShadow:
+                              stats.totalRemovals > 0
+                                ? `0 0 16px rgba(249,115,22,0.3)`
+                                : 'none',
                           }}
                         >
                           {digestLoading ? (
                             <>
-                              <div
-                                style={{
-                                  width: 14,
-                                  height: 14,
-                                  border: '2px solid rgba(255,255,255,0.3)',
-                                  borderTop: '2px solid #fff',
-                                  borderRadius: '50%',
-                                  animation: 'spin 0.7s linear infinite',
-                                }}
-                              />{' '}
-                              Posting…
+                              <Spinner /> Posting…
                             </>
                           ) : (
                             <>
@@ -1631,28 +1559,19 @@ export const App = () => {
                         </p>
                       )}
                       {digestResult && !digestResult.error && (
-                        <DigestSuccessBanner
-                          postUrl={digestResult.postUrl}
-                          dark={dark}
-                          onDismiss={() => setDigestResult(null)}
-                        />
+                        <DigestBanner onDismiss={() => setDigestResult(null)} />
                       )}
                     </Card>
-
-                    <Card
-                      dark={dark}
-                      style={{ borderColor: 'rgba(239,68,68,0.2)' }}
-                    >
-                      <CardHeader
-                        icon={<IcAlertTriangle size={14} color="#ef4444" />}
+                    <Card style={{ borderColor: 'rgba(239,68,68,0.18)' }}>
+                      <CardHead
+                        icon={<IcWarn size={13} color="#ef4444" />}
                         title="Danger Zone"
-                        iconBg="rgba(239,68,68,0.1)"
-                        dark={dark}
+                        accent="rgba(239,68,68,0.1)"
                       />
                       <p
                         style={{
                           fontSize: 12,
-                          color: textMuted,
+                          color: TEXT_MUTED,
                           marginBottom: 14,
                           lineHeight: 1.6,
                         }}
@@ -1664,10 +1583,10 @@ export const App = () => {
                         disabled={clearLoading}
                         style={{
                           width: '100%',
-                          padding: '11px 0',
-                          background: 'rgba(239,68,68,0.08)',
-                          border: '1px solid rgba(239,68,68,0.25)',
-                          borderRadius: 12,
+                          padding: '10px 0',
+                          background: 'rgba(239,68,68,0.07)',
+                          border: '1px solid rgba(239,68,68,0.2)',
+                          borderRadius: 11,
                           color: '#ef4444',
                           fontSize: 13,
                           fontWeight: 700,
@@ -1685,7 +1604,7 @@ export const App = () => {
                         <p
                           style={{
                             fontSize: 11,
-                            color: textMuted,
+                            color: TEXT_MUTED,
                             textAlign: 'center',
                             marginTop: 8,
                           }}
@@ -1695,58 +1614,64 @@ export const App = () => {
                       )}
                     </Card>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )}
 
-              {tab === 'reasons' && (
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-                >
-                  {ruleKeys.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                      {ruleKeys.map((r) => (
-                        <RuleBadge
+            {/* REASONS */}
+            {tab === 'reasons' && (
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+              >
+                {reasonEntries.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {reasonEntries
+                      .filter(([k]) => k !== REMOVAL_REASON_NONE)
+                      .map(([r], i) => (
+                        <span
                           key={r}
-                          label={r}
-                          index={reasonColorMap[r]}
-                        />
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            background: `${RULE_COLORS[i % RULE_COLORS.length]}18`,
+                            color: RULE_COLORS[i % RULE_COLORS.length],
+                            padding: '3px 10px',
+                            borderRadius: 99,
+                            border: `1px solid ${RULE_COLORS[i % RULE_COLORS.length]}22`,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: RULE_COLORS[i % RULE_COLORS.length],
+                              display: 'inline-block',
+                            }}
+                          />
+                          {r}
+                        </span>
                       ))}
-                    </div>
-                  )}
-                  <Card dark={dark}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginBottom: 14,
-                      }}
-                    >
-                      <p
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: dark ? '#6b7280' : '#9ca3af',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.1em',
-                          margin: 0,
-                        }}
-                      >
-                        Removal Reasons This Week ({stats.totalRemovals} total)
-                      </p>
-                      {Object.keys(stats.byReason).length > 6 && (
+                  </div>
+                )}
+                <Card glow>
+                  <SLabel
+                    action={
+                      Object.keys(stats.byReason).length > 6 && (
                         <button
                           onClick={() => setShowAllReasons((v) => !v)}
                           style={{
                             fontSize: 11,
                             fontWeight: 700,
-                            color: '#f97316',
-                            background: 'rgba(249,115,22,0.1)',
-                            border: '1px solid rgba(249,115,22,0.2)',
+                            color: ORANGE,
+                            background: ORANGE_DIM,
+                            border: `1px solid ${ORANGE_BORDER}`,
                             borderRadius: 99,
                             padding: '4px 12px',
                             cursor: 'pointer',
-                            flexShrink: 0,
                             fontFamily: 'inherit',
                           }}
                         >
@@ -1754,70 +1679,148 @@ export const App = () => {
                             ? 'Show less'
                             : `Show all ${Object.keys(stats.byReason).length}`}
                         </button>
-                      )}
-                    </div>
-                    <BarChart
-                      data={stats.byReason}
+                      )
+                    }
+                  >
+                    Removal Reasons · {stats.totalRemovals} total
+                  </SLabel>
+                  {visibleReasons.map(([label, count], i) => (
+                    <HBar
+                      key={label}
+                      label={label}
+                      count={count}
                       total={stats.totalRemovals}
-                      colorized
-                      dark={dark}
-                      showAll={showAllReasons}
-                      colorMap={reasonColorMap}
+                      color={RULE_COLORS[i % RULE_COLORS.length]}
                     />
-                  </Card>
-                  <Card dark={dark}>
-                    <SectionTitle dark={dark}>Removals by Day</SectionTitle>
-                    <BarChart
-                      data={stats.byDay}
-                      total={Math.max(...Object.values(stats.byDay), 1)}
-                      accent="#a855f7"
-                      dark={dark}
-                    />
-                  </Card>
-                </div>
-              )}
-
-              {tab === 'recent' && (
-                <Card dark={dark}>
-                  <SectionTitle dark={dark}>
-                    Recent Post Removals (this week)
-                  </SectionTitle>
-                  {recentRemovals.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                      <div
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 12,
-                          background: dark
-                            ? 'rgba(255,255,255,0.06)'
-                            : 'rgba(0,0,0,0.05)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          margin: '0 auto 12px',
-                        }}
-                      >
-                        <IcCheckCircle
-                          size={22}
-                          color={dark ? '#6b7280' : '#9ca3af'}
-                        />
-                      </div>
-                      <p style={{ fontSize: 13, color: textMuted }}>
-                        No posts removed yet.
-                      </p>
-                    </div>
-                  ) : (
-                    recentRemovals.map((entry) => (
-                      <RemovalRow key={entry.id} entry={entry} dark={dark} />
-                    ))
-                  )}
+                  ))}
                 </Card>
-              )}
-            </>
-          )}
-        </div>
+                <Card>
+                  <SLabel>Day-wise Breakdown</SLabel>
+                  <DayChart data={stats.byDay} />
+                </Card>
+                <Card>
+                  <SLabel>Rule Distribution</SLabel>
+                  <DonutChart
+                    data={stats.byReason}
+                    total={stats.totalRemovals}
+                  />
+                </Card>
+              </div>
+            )}
+
+            {/* RECENT */}
+            {tab === 'recent' && (
+              <Card>
+                <SLabel>
+                  Recent Removals — {stats.postCount ?? 0} posts ·{' '}
+                  {stats.commentCount ?? 0} comments
+                </SLabel>
+                {recentRemovals.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                    <div
+                      style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 12,
+                        background: SURFACE_HOVER,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 12px',
+                      }}
+                    >
+                      <IcClip size={20} color={TEXT_MUTED} />
+                    </div>
+                    <p style={{ fontSize: 13, color: TEXT_MUTED }}>
+                      No removals yet.
+                    </p>
+                  </div>
+                ) : (
+                  recentRemovals.map((entry) => (
+                    <RemovalRow key={entry.id} entry={entry} />
+                  ))
+                )}
+              </Card>
+            )}
+          </>
+        )}
       </div>
+
+      {/* ── Mobile bottom nav ── */}
+      <div
+        className="mobile-nav"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: 'rgba(12,12,15,0.97)',
+          borderTop: `1px solid ${BORDER}`,
+          display: 'flex',
+          padding: '8px 0 max(8px, env(safe-area-inset-bottom))',
+          zIndex: 60,
+          backdropFilter: 'blur(16px)',
+        }}
+      >
+        {['overview', 'reasons', 'recent'].map((t) => {
+          const isActive = tab === t;
+          const icons = {
+            overview: (
+              <IcBar size={20} color={isActive ? ORANGE : TEXT_MUTED} />
+            ),
+            reasons: (
+              <IcTarget size={20} color={isActive ? ORANGE : TEXT_MUTED} />
+            ),
+            recent: <IcClip size={20} color={isActive ? ORANGE : TEXT_MUTED} />,
+          };
+          return (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 0',
+              }}
+            >
+              {icons[t]}
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: isActive ? 700 : 500,
+                  color: isActive ? ORANGE : TEXT_MUTED,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                {t}
+              </span>
+              {isActive && (
+                <span
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    background: ORANGE,
+                    boxShadow: `0 0 6px ${ORANGE}`,
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <style>{`
+        @media (min-width: 640px) { .mobile-nav { display: none !important; } }
+        @media (max-width: 639px) { .body-pad { padding-bottom: 80px !important; } }
+      `}</style>
     </div>
   );
 };
@@ -1829,5 +1832,4 @@ if (root)
       <App />
     </StrictMode>
   );
-
 export default App;

@@ -1,370 +1,435 @@
 import './index.css';
 
-import { navigateTo, context, requestExpandedMode } from '@devvit/web/client';
+import { requestExpandedMode } from '@devvit/web/client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-const features = [
-  {
-    icon: 'ti-chart-bar',
-    title: 'Weekly Analytics',
-    description: 'Track removal reasons and moderation trends over time.',
-  },
-  {
-    icon: 'ti-robot',
-    title: 'Fully Automatic',
-    description: 'Runs silently 24/7 with no intervention needed.',
-  },
-  {
-    icon: 'ti-bolt',
-    title: 'Zero Effort',
-    description: 'Install once and receive weekly reports in your inbox.',
-  },
-];
+// ─────────────────────────────────────────────
+// DROP YOUR LOGO HERE
+// Replace the src with your actual image URL or
+// import e.g.:  import logoSrc from './logo.png';
+// ─────────────────────────────────────────────
+const LOGO_SRC = '/logo.png'; // ← swap this
+const LOGO_ALT = 'ModStat';
+
+// Preload BEFORE React renders so the browser fetches logo & fonts
+// in parallel with JS parsing — eliminates the pop-in lag entirely.
+(function preload() {
+  // Logo: hint browser to fetch it immediately
+  const imgLink = document.createElement('link');
+  imgLink.rel = 'preload';
+  imgLink.as = 'image';
+  imgLink.href = LOGO_SRC;
+  document.head.appendChild(imgLink);
+
+  // Fonts: <link> loads in parallel; @import inside <style> is render-blocking
+  const fontLink = document.createElement('link');
+  fontLink.rel = 'stylesheet';
+  fontLink.href =
+    'https://fonts.googleapis.com/css2?family=Poppins:wght@700;800;900&family=Instrument+Serif:ital@0;1&display=swap';
+  document.head.appendChild(fontLink);
+})();
 
 const Splash = () => {
+  const isMobile = window.innerWidth < 768;
+
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
-        background:
-          'radial-gradient(ellipse at 50% 0%, #3a1a0a 0%, #1a0a00 40%, #0f0f0f 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: "'DM Sans', system-ui, sans-serif",
         overflow: 'hidden',
-        padding: '24px 20px',
-        boxSizing: 'border-box',
+        background: '#070707',
+        color: '#fff',
+        fontFamily: "'Plus Jakarta Sans', 'DM Sans', system-ui, sans-serif",
+        WebkitTextSizeAdjust: '100%',
       }}
     >
-      {/* Background glow */}
+      <style>{`
+
+        @keyframes glow-pulse {
+          0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(1); }
+          50%       { opacity: 0.88; transform: translateX(-50%) scale(1.07); }
+        }
+        @keyframes orb-drift {
+          0%, 100% { transform: translateX(-50%) translateY(0px)   scale(1);    opacity: 0.7; }
+          50%       { transform: translateX(-50%) translateY(-20px) scale(1.09); opacity: 1;   }
+        }
+        @keyframes fade-up {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .splash-logo    { animation: fade-up 0.45s ease both; animation-delay: 0.00s; }
+        .splash-badge   { animation: fade-up 0.5s  ease both; animation-delay: 0.10s; }
+        .splash-heading { animation: fade-up 0.5s  ease both; animation-delay: 0.20s; }
+        .splash-sub     { animation: fade-up 0.5s  ease both; animation-delay: 0.30s; }
+        .splash-cta     { animation: fade-up 0.5s  ease both; animation-delay: 0.40s; }
+        .splash-stats   { animation: fade-up 0.5s  ease both; animation-delay: 0.50s; }
+
+        .cta-btn:hover { transform: translateY(-2px) !important; box-shadow: 0 0 72px rgba(255,106,61,0.42) !important; }
+        .nav-btn:hover { background: rgba(255,106,61,0.08) !important; }
+      `}</style>
+
+      {/* GRID */}
       <div
         style={{
           position: 'absolute',
-          top: '-60px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '400px',
-          height: '300px',
-          background:
-            'radial-gradient(ellipse, rgba(249,115,22,0.18) 0%, transparent 70%)',
+          inset: 0,
           pointerEvents: 'none',
+          backgroundImage: `
+          linear-gradient(rgba(255,255,255,0.022) 1px, transparent 8px),
+          linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 8px)`,
+          backgroundSize: isMobile ? '80px 80px' : '110px 110px',
+          opacity: 0.35,
         }}
       />
 
-      {/* Logo icon centered */}
+      {/* TOP GLOW */}
       <div
         style={{
-          width: '56px',
-          height: '56px',
-          borderRadius: '16px',
-          background: 'linear-gradient(135deg, #f97316, #ef4444)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 0 32px rgba(249,115,22,0.45)',
-          marginBottom: '12px',
+          position: 'absolute',
+          top: '-260px',
+          left: '50%',
+          width: isMobile ? '360px' : '1100px',
+          height: isMobile ? '400px' : '750px',
+          background:
+            'radial-gradient(ellipse, rgba(255,106,61,0.20) 0%, rgba(255,80,20,0.07) 50%, transparent 72%)',
+          filter: 'blur(80px)',
+          pointerEvents: 'none',
+          animation: 'glow-pulse 6s ease-in-out infinite',
         }}
-      >
-        <i
-          className="ti ti-chart-bar"
-          style={{ fontSize: '26px', color: '#fff' }}
-          aria-hidden="true"
-        />
-      </div>
+      />
 
-      {/* Wordmark */}
-      <h1
+      {/* CENTRE ORB */}
+      <div
         style={{
-          margin: '0 0 4px',
-          fontSize: '2.4rem',
-          fontWeight: 800,
-          letterSpacing: '-0.04em',
-          lineHeight: 1,
-          color: '#fff',
+          position: 'absolute',
+          width: isMobile ? '320px' : '700px',
+          height: isMobile ? '320px' : '700px',
+          background:
+            'radial-gradient(circle, rgba(255,106,61,0.12) 0%, rgba(255,60,10,0.05) 55%, transparent 72%)',
+          filter: 'blur(55px)',
+          top: isMobile ? '80px' : '60px',
+          left: '50%',
+          pointerEvents: 'none',
+          animation: 'orb-drift 8s ease-in-out infinite',
         }}
-      >
-        Mod
-        <span
+      />
+
+      {/* BOTTOM EDGE GLOW — desktop */}
+      {!isMobile && (
+        <div
           style={{
-            background: 'linear-gradient(90deg, #f97316, #ef4444)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            position: 'absolute',
+            bottom: '-100px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: '800px',
+            height: '320px',
+            background:
+              'radial-gradient(ellipse, rgba(255,106,61,0.07), transparent 70%)',
+            filter: 'blur(60px)',
+            pointerEvents: 'none',
           }}
-        >
-          Stat
-        </span>
-      </h1>
+        />
+      )}
 
-      {/* Subtitle label */}
-      <p
-        style={{
-          margin: '0 0 10px',
-          fontSize: '9px',
-          fontWeight: 600,
-          letterSpacing: '0.22em',
-          textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.3)',
-        }}
-      >
-        Reddit Analytics &amp; Trends
-      </p>
-
-      {/* Welcome */}
-      <p
-        style={{
-          margin: '0 0 10px',
-          fontSize: '13px',
-          color: 'rgba(255,255,255,0.45)',
-        }}
-      >
-        Welcome back,{' '}
-        <span style={{ color: '#f97316', fontWeight: 600 }}>
-          {context.username ?? 'Moderator'}
-        </span>
-      </p>
-
-      {/* Heading */}
-      <h2
-        style={{
-          margin: '0 0 8px',
-          fontSize: '1.35rem',
-          fontWeight: 800,
-          color: '#fff',
-          textAlign: 'center',
-          lineHeight: 1.3,
-          maxWidth: '340px',
-        }}
-      >
-        Get private weekly insights into your moderation trends.
-      </h2>
-
-      {/* Description */}
-      <p
-        style={{
-          margin: '0 0 20px',
-          fontSize: '13px',
-          color: 'rgba(255,255,255,0.45)',
-          textAlign: 'center',
-          maxWidth: '320px',
-          lineHeight: 1.5,
-        }}
-      >
-        Track removals, repeat offenders, and rule patterns automatically
-        delivered to your inbox.
-      </p>
-
-      {/* Feature list */}
+      {/* ── FULL PAGE LAYOUT ─────────────────────────────────── */}
       <div
         style={{
-          width: '100%',
-          maxWidth: '380px',
+          position: 'relative',
+          zIndex: 2,
+          height: '100dvh',
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px',
-          marginBottom: '20px',
+          alignItems: 'center',
+          boxSizing: 'border-box',
         }}
       >
-        {features.map(({ icon, title, description }) => (
-          <div
-            key={title}
+        {/* ── LOGO AREA ───────────────────────────────────────
+            Replace the <img> src with your logo file.
+            The wrapper is sized so your logo renders crisply
+            on both mobile and desktop with no extra work.
+            Recommended logo specs:
+              • Format : SVG (best) or PNG with transparency
+              • Height : at least 80px @2x (so 160px source)
+              • Width  : any — it scales proportionally
+        ─────────────────────────────────────────────────────── */}
+        <div
+          className="splash-logo"
+          style={{
+            width: '100%',
+            display: 'flex',
+            justifyContent: isMobile ? 'center' : 'space-between',
+            alignItems: 'center',
+            padding: isMobile ? '12px 24px' : '20px 52px',
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* LOGO IMAGE — swap src below */}
+          <img
+            src="/logo.png"
+            alt="ModStat"
             style={{
-              display: 'flex',
+              height: isMobile ? '140px' : '72px', // adjust to match your logo's visual weight
+              width: 'auto',
+              display: 'block',
+              objectFit: 'contain',
+              // Subtle glow so it reads on the dark bg without touching the image itself
+              filter: 'drop-shadow(0 0 12px rgba(255,106,61,0.25))',
+            }}
+            // Graceful fallback if logo hasn't been swapped in yet
+            onError={(e) => {
+              const el = e.currentTarget;
+              el.style.display = 'none';
+              const fallback = el.nextElementSibling as HTMLElement | null;
+              if (fallback) fallback.style.display = 'flex';
+            }}
+          />
+          {/* FALLBACK placeholder shown only when image fails to load */}
+          <div
+            style={{
+              display: 'none', // hidden by default; shown via onError above
               alignItems: 'center',
-              gap: '12px',
-              padding: '12px 14px',
-              borderRadius: '12px',
-              background: 'rgba(255,255,255,0.05)',
-              border: '0.5px solid rgba(255,255,255,0.09)',
+              gap: '8px',
+              height: isMobile ? '32px' : '40px',
             }}
           >
             <div
               style={{
-                flexShrink: 0,
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                background: 'rgba(249,115,22,0.15)',
-                border: '0.5px solid rgba(249,115,22,0.25)',
+                width: isMobile ? '32px' : '40px',
+                height: isMobile ? '32px' : '40px',
+                borderRadius: '8px',
+                border: '1.5px dashed rgba(255,106,61,0.5)',
+                background: 'rgba(255,106,61,0.06)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
               <i
-                className={`ti ${icon}`}
-                style={{ fontSize: '17px', color: '#f97316' }}
-                aria-hidden="true"
+                className="ti ti-photo"
+                style={{ fontSize: '14px', color: 'rgba(255,106,61,0.6)' }}
               />
             </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: 'rgba(255,255,255,0.9)',
-                }}
-              >
-                {title}
-              </p>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '11.5px',
-                  color: 'rgba(255,255,255,0.4)',
-                  lineHeight: 1.4,
-                }}
-              >
-                {description}
-              </p>
-            </div>
-            <i
-              className="ti ti-chevron-right"
+            <span
               style={{
-                fontSize: '15px',
-                color: 'rgba(255,255,255,0.25)',
-                flexShrink: 0,
-              }}
-              aria-hidden="true"
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* CTA */}
-      <button
-        onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-          padding: '13px 0',
-          width: '100%',
-          maxWidth: '380px',
-          borderRadius: '100px',
-          border: 'none',
-          background: 'linear-gradient(135deg, #f97316, #ef4444)',
-          color: '#fff',
-          fontSize: '14px',
-          fontWeight: 700,
-          cursor: 'pointer',
-          boxShadow: '0 8px 28px rgba(249,115,22,0.45)',
-          marginBottom: '14px',
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.opacity = '0.88';
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.opacity = '1';
-        }}
-      >
-        <i
-          className="ti ti-rocket"
-          style={{ fontSize: '16px' }}
-          aria-hidden="true"
-        />
-        Launch Dashboard
-        <i
-          className="ti ti-chevron-right"
-          style={{ fontSize: '15px' }}
-          aria-hidden="true"
-        />
-      </button>
-
-      {/* Trust line */}
-      <p
-        style={{
-          margin: '0 0 10px',
-          fontSize: '12px',
-          color: 'rgba(255,255,255,0.3)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
-      >
-        <i
-          className="ti ti-shield-check"
-          style={{ fontSize: '13px', color: 'rgba(249,115,22,0.5)' }}
-          aria-hidden="true"
-        />
-        Trusted by moderators across hundreds of communities.
-      </p>
-
-      {/* Footer links */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-        }}
-      >
-        {[
-          {
-            label: 'Docs',
-            url: 'https://developers.reddit.com/docs',
-            icon: 'ti-file-text',
-          },
-          {
-            label: 'Community',
-            url: 'https://www.reddit.com/r/Devvit',
-            icon: 'ti-users',
-          },
-          {
-            label: 'Support',
-            url: 'https://discord.com/invite/R7yu2wh9Qz',
-            icon: 'ti-headset',
-          },
-        ].map(({ label, url, icon }, i, arr) => (
-          <span
-            key={label}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-          >
-            <button
-              onClick={() => navigateTo(url)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '4px 8px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
                 fontSize: '11px',
-                color: 'rgba(255,255,255,0.3)',
-                borderRadius: '6px',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.color =
-                  'rgba(255,255,255,0.65)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.color =
-                  'rgba(255,255,255,0.3)';
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.28)',
+                fontFamily: "'Poppins', sans-serif",
               }}
             >
-              <i
-                className={`ti ${icon}`}
-                style={{ fontSize: '12px' }}
-                aria-hidden="true"
-              />
-              {label}
+              Your Logo
+            </span>
+          </div>
+
+          {/* Desktop "Launch" button stays on the right */}
+          {!isMobile && (
+            <button
+              className="nav-btn"
+              onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+              style={{
+                background: 'transparent',
+                border: '1px solid rgba(255,106,61,0.32)',
+                color: '#ff6a3d',
+                padding: '11px 24px',
+                borderRadius: '10px',
+                fontWeight: 700,
+                fontSize: '13px',
+                letterSpacing: '0.04em',
+                cursor: 'pointer',
+                transition: '0.2s ease',
+                fontFamily: "'Poppins', sans-serif",
+              }}
+            >
+              Launch Dashboard →
             </button>
-            {i < arr.length - 1 && (
-              <span
-                style={{ fontSize: '13px', color: 'rgba(255,255,255,0.2)' }}
-              >
-                •
-              </span>
-            )}
-          </span>
-        ))}
+          )}
+        </div>
+
+        {/* ── HERO ────────────────────────────────────────────── */}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            textAlign: 'center',
+            boxSizing: 'border-box',
+            padding: isMobile ? '-80px 24px 24px' : '-80px 80px 40px',
+            width: '100%',
+          }}
+        >
+          {/* TRUST BADGE */}
+          <div
+            className="splash-badge"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '7px',
+              padding: isMobile ? '7px 13px' : '9px 18px',
+              borderRadius: '999px',
+              border: '1px solid rgba(255,106,61,0.20)',
+              background: 'rgba(255,106,61,0.06)',
+              backdropFilter: 'blur(12px)',
+              marginBottom: isMobile ? '22px' : '40px',
+            }}
+          >
+            <i
+              className="ti ti-shield-check"
+              style={{ fontSize: '12px', color: '#ff6a3d' }}
+            />
+            <span
+              style={{
+                fontSize: isMobile ? '9px' : '11px',
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.62)',
+                fontWeight: 600,
+              }}
+            >
+              Trusted by moderators across communities
+            </span>
+          </div>
+
+          {/* HEADING */}
+          <h2
+            className="splash-heading"
+            style={{
+              margin: 0,
+              maxWidth: isMobile ? '100%' : '1200px',
+              fontSize: isMobile
+                ? 'clamp(2rem, 10vw, 2.7rem)'
+                : 'clamp(6rem, 8vw, 9rem)',
+              lineHeight: isMobile ? 1.05 : 0.96,
+              letterSpacing: isMobile ? '-0.02em' : '-0.035em',
+              fontWeight: 400,
+              fontFamily: "'Instrument Serif', 'Times New Roman', serif",
+            }}
+          >
+            Smarter moderation.
+            <br />
+            <span
+              style={{
+                color: '#ff6a3d',
+                fontStyle: 'italic',
+                textShadow: '0 0 80px rgba(255,106,61,0.38)',
+              }}
+            >
+              Stronger communities.
+            </span>
+          </h2>
+
+          {/* ACCENT DIVIDER — desktop */}
+          {!isMobile && (
+            <div
+              style={{
+                width: '52px',
+                height: '1.5px',
+                background: 'rgba(255,106,61,0.5)',
+                margin: '32px auto',
+                borderRadius: '999px',
+                boxShadow: '0 0 14px rgba(255,106,61,0.55)',
+              }}
+            />
+          )}
+
+          {/* SUBTEXT */}
+          <p
+            className="splash-sub"
+            style={{
+              marginTop: isMobile ? '18px' : '0',
+              marginBottom: isMobile ? '30px' : '44px',
+              maxWidth: isMobile ? '100%' : '560px',
+              fontSize: isMobile ? '15px' : '20px',
+              lineHeight: 1.7,
+              fontWeight: 400,
+              color: 'rgba(255,255,255,0.52)',
+              letterSpacing: '0.01em',
+            }}
+          >
+            Track removals, repeat offenders, and rule trends — delivered to
+            your inbox.
+          </p>
+
+          {/* CTA */}
+          <button
+            className="splash-cta cta-btn"
+            onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '9px',
+              background: '#ff6a3d',
+              color: '#fff',
+              border: 'none',
+              padding: isMobile ? '13px 24px' : '16px 40px',
+              borderRadius: '12px',
+              fontSize: isMobile ? '14px' : '17px',
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+              cursor: 'pointer',
+              boxShadow:
+                '0 0 52px rgba(255,106,61,0.28), inset 0 1px 0 rgba(255,255,255,0.15)',
+              transition: 'all 0.22s ease',
+              WebkitTapHighlightColor: 'transparent',
+              fontFamily: "'Poppins', sans-serif",
+            }}
+          >
+            Launch Dashboard
+            <i className="ti ti-arrow-right" style={{ fontSize: '15px' }} />
+          </button>
+
+          {/* STAT ROW — desktop only */}
+          {!isMobile && (
+            <div
+              className="splash-stats"
+              style={{
+                display: 'flex',
+                gap: '64px',
+                marginTop: '64px',
+                alignItems: 'center',
+              }}
+            >
+              {[
+                { value: 'Weekly', label: 'Digest reports' },
+                { value: 'Auto', label: 'Zero manual work' },
+                { value: 'Real-time', label: 'Rule trend alerts' },
+              ].map(({ value, label }, i) => (
+                <div key={i} style={{ textAlign: 'center' }}>
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      letterSpacing: '0.16em',
+                      textTransform: 'uppercase',
+                      color: '#ff6a3d',
+                      fontFamily: "'Poppins', sans-serif",
+                      textShadow: '0 0 20px rgba(255,106,61,0.45)',
+                    }}
+                  >
+                    {value}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: 'rgba(255,255,255,0.32)',
+                      marginTop: '5px',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    {label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

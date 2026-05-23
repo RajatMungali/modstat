@@ -247,20 +247,18 @@ api.post('/generate-digest', async (c) => {
 
     const subject = `[ModStat] Weekly Mod Report — ${weekStartLabel} to ${weekEndLabel}`;
 
-    const conversationId = await reddit.modMail.createModDiscussionConversation(
-      {
-        subject,
-        bodyMarkdown: digestBody,
-        subredditId: context.subredditId,
-      }
-    );
+    const conversationId = await reddit.modMail.createModInboxConversation({
+      subject,
+      bodyMarkdown: digestBody,
+      subredditId: context.subredditId,
+    });
 
     const modmailUrl = `https://mod.reddit.com/mail/perma/${conversationId}`;
 
     return c.json<DigestResponse>({
       type: 'digest',
       success: true,
-      message: `Digest posted to Mod Discussions.`,
+      message: `Digest posted to Modmail.`,
       conversationId,
       modmailUrl,
     });

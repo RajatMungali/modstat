@@ -863,7 +863,7 @@ const DigestBanner = ({ onDismiss }) => (
               margin: 0,
             }}
           >
-            Sent to Mod Discussions!
+            Sent to Modmail!
           </p>
           <p
             style={{ fontSize: 10, color: TEXT_MUTED, margin: 0, marginTop: 1 }}
@@ -886,7 +886,7 @@ const DigestBanner = ({ onDismiss }) => (
       </button>
     </div>
     <p style={{ fontSize: 11, color: TEXT_MUTED, textAlign: 'center' }}>
-      Check Mod Discussions in modmail.
+      Check your modmail inbox.
     </p>
   </div>
 );
@@ -1501,7 +1501,7 @@ export const App = () => {
                             lineHeight: 1.6,
                           }}
                         >
-                          Send this week's stats to Mod Discussions.
+                          Send this week's stats to Modmail.
                         </p>
                       )}
                       {(!digestResult || digestResult.error) && (
@@ -1541,7 +1541,8 @@ export const App = () => {
                             </>
                           ) : (
                             <>
-                              <IcMail size={13} color="#fff" /> Generate Digest
+                              <IcMail size={13} color="#fff" /> Generate Weekly
+                              Report
                             </>
                           )}
                         </button>

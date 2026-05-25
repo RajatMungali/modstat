@@ -25,13 +25,6 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
-      },
-      {
-        "label": "Seed ModStat Demo Data",
-        "description": "Load 4 weeks of realistic demo data (use before submitting)",
-        "location": "subreddit",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/seed-demo-data"
       }
     ]
   },

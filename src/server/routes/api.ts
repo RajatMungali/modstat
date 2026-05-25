@@ -21,6 +21,12 @@ import { getPrevWeekKey, getWeekKey } from '../core/week';
 
 export const api = new Hono();
 
+type StoredRemovalEntry = RemovalEntry & {
+  reasonFinal?: boolean;
+  approved?: boolean;
+  approvedAt?: number;
+};
+
 // ── Helper: check moderator ─────────────────
 async function checkModerator(): Promise<boolean> {
   try {
@@ -131,13 +137,54 @@ api.post('/generate-digest', async (c) => {
     }
     const prevTotal = Object.values(prevByReason).reduce((a, b) => a + b, 0);
 
+    // ── Scan all entries for false positive / automod data ───
+    const allIds = await listGet(`${weekKey}:list`);
+    let automodTotal = 0;
+    let automodConfirmed = 0; // caught by automod, human confirmed removal
+    let automodFalsePositives = 0; // automod removed → later approved (undone)
+    let automodPending = 0;
+    let redditFilterTotal = 0;
+    let noReasonTotal = 0;
+
+    for (const id of allIds) {
+      const raw = await redis.get(`removal:${id}`).catch(() => null);
+      if (!raw) continue;
+      const entry = JSON.parse(raw) as StoredRemovalEntry;
+
+      const isAutomod = entry.modName.toLowerCase() === 'automoderator';
+      const isRedditFilter =
+        entry.removalReason === REMOVAL_REASON_REDDIT_FILTER ||
+        entry.modName.toLowerCase() === 'reddit';
+
+      if (isRedditFilter) {
+        redditFilterTotal++;
+      }
+
+      if (isAutomod) {
+        automodTotal++;
+        if (entry.approved) {
+          automodFalsePositives++;
+        } else if (entry.removalReason === REMOVAL_REASON_AUTOMOD) {
+          automodConfirmed++;
+        } else if (entry.removalReason === REMOVAL_REASON_AUTOMOD_PENDING) {
+          automodPending++;
+        }
+      }
+
+      if (!entry.approved && entry.removalReason === REMOVAL_REASON_NONE) {
+        noReasonTotal++;
+      }
+    }
+
+    const automodFalsePositiveRate =
+      automodTotal > 0
+        ? Math.round((automodFalsePositives / automodTotal) * 100)
+        : 0;
+
     // ── Date labels ──────────────────────────
     const weekStartLabel = new Date(stats.weekStart).toLocaleDateString(
       'en-US',
-      {
-        month: 'short',
-        day: 'numeric',
-      }
+      { month: 'short', day: 'numeric' }
     );
     const weekEndLabel = new Date(stats.weekEnd).toLocaleDateString('en-US', {
       month: 'short',
@@ -145,10 +192,13 @@ api.post('/generate-digest', async (c) => {
     });
 
     // ── Derived values ───────────────────────
-    const noReasonCount = stats.byReason[REMOVAL_REASON_NONE] ?? 0;
-
     const topViolation = Object.entries(stats.byReason)
-      .filter(([r]) => r !== REMOVAL_REASON_NONE)
+      .filter(
+        ([r]) =>
+          r !== REMOVAL_REASON_NONE &&
+          r !== REMOVAL_REASON_AUTOMOD_PENDING &&
+          r !== REMOVAL_REASON_REDDIT_FILTER
+      )
       .sort((a, b) => b[1] - a[1])[0];
 
     const busiestDay = Object.entries(stats.byDay).sort(
@@ -156,23 +206,16 @@ api.post('/generate-digest', async (c) => {
     )[0];
 
     const repeatOffenders = stats.topOffenders.filter((o) => o.count >= 2);
-    const commentRemovals: RemovalEntry[] = [];
-    const commentSection = '';
 
     // ════════════════════════════════════════
-    // DIGEST BODY
+    // DIGEST SECTIONS
     // ════════════════════════════════════════
 
     // ── At a Glance ──────────────────────────
-    const totalLabel =
-      stats.postCount !== stats.totalRemovals
-        ? `${stats.totalRemovals} removals (${stats.postCount} posts, ${commentRemovals.length} comments)`
-        : `${stats.totalRemovals} posts`;
-
     const glance = [
-      `📊 **${totalLabel} removed this week**${wow(stats.totalRemovals, prevTotal)}`,
+      `📊 **${stats.totalRemovals} posts removed this week**${wow(stats.totalRemovals, prevTotal)}`,
       topViolation
-        ? `🚨 Top violation: **${topViolation[0]}** — ${topViolation[1]} (${Math.round((topViolation[1] / stats.totalRemovals) * 100)}%)`
+        ? `🚨 Top violation: **${topViolation[0]}** - ${topViolation[1]} (${Math.round((topViolation[1] / stats.totalRemovals) * 100)}%)`
         : '',
       busiestDay && busiestDay[1] > 0
         ? `📅 Busiest day: **${busiestDay[0]}** (${busiestDay[1]} removals)`
@@ -183,16 +226,61 @@ api.post('/generate-digest', async (c) => {
       .join('  \n');
 
     // ── Rules Breakdown ──────────────────────
+    // Exclude system-level pseudo-reasons from the rule table; they get their own section below.
+    const SYSTEM_REASONS = new Set([
+      REMOVAL_REASON_NONE,
+      REMOVAL_REASON_AUTOMOD_PENDING,
+      REMOVAL_REASON_REDDIT_FILTER,
+      REMOVAL_REASON_AUTOMOD,
+    ]);
+
     const ruleLines = Object.entries(stats.byReason)
-      .filter(([r, count]) => r !== REMOVAL_REASON_NONE && count > 0)
+      .filter(([r, count]) => !SYSTEM_REASONS.has(r) && count > 0)
       .sort((a, b) => b[1] - a[1])
       .map(([rule, count]) => {
         const pct = Math.round((count / stats.totalRemovals) * 100);
-        return `* ${rule}: ${count} (${pct}%)${wow(count, prevByReason[rule] ?? 0)}`;
+        return `* **${rule}**: ${count} (${pct}%)${wow(count, prevByReason[rule] ?? 0)}`;
       })
       .join('\n');
 
-    const rulesSection = `**⚖️ Rules Breakdown**\n\n${ruleLines || '* No rule data yet.'}`;
+    const rulesSection = `**⚖️ Rules Breakdown**\n\n${ruleLines || '* No named rules recorded yet.'}`;
+
+    // ── AutoModerator Section ────────────────
+    const automodLines: string[] = [];
+
+    if (automodTotal > 0) {
+      automodLines.push(`* **Total AutoMod actions**: ${automodTotal}`);
+
+      if (automodConfirmed > 0) {
+        automodLines.push(
+          `* Confirmed by mods: **${automodConfirmed}** (${Math.round((automodConfirmed / automodTotal) * 100)}%)`
+        );
+      }
+
+      if (automodFalsePositives > 0) {
+        automodLines.push(
+          `* ✅ False positives (approved after removal): **${automodFalsePositives}** - false positive rate **${automodFalsePositiveRate}%**`
+        );
+      } else {
+        automodLines.push(`* ✅ False positives: **0** - great accuracy!`);
+      }
+
+      if (automodPending > 0) {
+        automodLines.push(
+          `* ⏳ Pending reason (AutoMod rule not yet resolved): **${automodPending}**`
+        );
+      }
+    } else {
+      automodLines.push(`* No AutoModerator actions recorded this week.`);
+    }
+
+    if (redditFilterTotal > 0) {
+      automodLines.push(
+        `* 🚫 Reddit spam/filter removals: **${redditFilterTotal}**`
+      );
+    }
+
+    const automodSection = `**🤖 AutoModerator & Filters**\n\n${automodLines.join('\n')}`;
 
     // ── Repeat Offenders ─────────────────────
     const offenderLines =
@@ -200,7 +288,7 @@ api.post('/generate-digest', async (c) => {
         ? repeatOffenders
             .map(
               (o, i) =>
-                `${i + 1}. [u/${o.username}](https://www.reddit.com/user/${o.username}/) — ${o.count} removals`
+                `${i + 1}. [u/${o.username}](https://www.reddit.com/user/${o.username}/) - ${o.count} removals`
             )
             .join('\n')
         : 'None this week.';
@@ -211,9 +299,8 @@ api.post('/generate-digest', async (c) => {
     const modLines = Object.entries(stats.byMod)
       .sort((a, b) => b[1] - a[1])
       .map(([mod, count]) => {
-        const isAuto =
-          mod.toLowerCase() === 'automoderator' ||
-          mod.toLowerCase() === 'reddit';
+        const lower = mod.toLowerCase();
+        const isAuto = lower === 'automoderator' || lower === 'reddit';
         const name = isAuto
           ? mod
           : `[u/${mod}](https://www.reddit.com/user/${mod}/)`;
@@ -223,11 +310,24 @@ api.post('/generate-digest', async (c) => {
 
     const modSection = `**👮 Mod Team Activity**\n\n${modLines || '* No activity recorded.'}`;
 
-    // ── Footer nudge ─────────────────────────
-    const nudge =
-      noReasonCount > 0
-        ? `⚠️ ${noReasonCount} removal${noReasonCount > 1 ? 's' : ''} had no reason selected. Adding removal reasons during review helps ModStat track rule enforcement accurately.`
-        : `⚠️ Some automated removals may not include moderator reasons. Adding removal reasons during review helps improve ModStat's analytics accuracy.`;
+    // ── Data quality nudge ───────────────────
+    const nudgeLines: string[] = [];
+    if (noReasonTotal > 0) {
+      nudgeLines.push(
+        `⚠️ **${noReasonTotal}** removal${noReasonTotal > 1 ? 's' : ''} had no reason selected. Adding removal reasons during review helps ModStat track rule enforcement accurately.`
+      );
+    }
+    if (automodPending > 0) {
+      nudgeLines.push(
+        `⏳ **${automodPending}** AutoMod removal${automodPending > 1 ? 's' : ''} still have an unresolved reason - the scheduled reconciler will retry these automatically.`
+      );
+    }
+    if (nudgeLines.length === 0) {
+      nudgeLines.push(
+        `✅ All removals this week have reasons recorded - great moderation hygiene!`
+      );
+    }
+    const nudge = nudgeLines.join('  \n');
 
     // ── Footer ───────────────────────────────
     const footer = `---\n\n*Auto-generated by ModStat every Monday · r/${context.subredditName ?? ''}*`;
@@ -236,16 +336,16 @@ api.post('/generate-digest', async (c) => {
     const digestBody = [
       glance,
       rulesSection,
+      automodSection,
       offenderSection,
       modSection,
-      commentSection,
       nudge,
       footer,
     ]
       .filter(Boolean)
       .join('\n\n---\n\n');
 
-    const subject = `[ModStat] Weekly Mod Report — ${weekStartLabel} to ${weekEndLabel}`;
+    const subject = `[ModStat] Weekly Mod Report - ${weekStartLabel} to ${weekEndLabel}`;
 
     const conversationId = await reddit.modMail.createModInboxConversation({
       subject,
@@ -323,6 +423,7 @@ api.post('/reset-week', async (c) => {
     await redis.del(`${weekKey}:modKeys`).catch(() => null);
     await redis.del(`${weekKey}:offenderKeys`).catch(() => null);
     await redis.del(`${weekKey}:list`).catch(() => null);
+    await redis.del(`${weekKey}:automod:false_positives`).catch(() => null);
 
     return c.json({ status: 'success', message: 'Week cleared.' });
   } catch (error) {

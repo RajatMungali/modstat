@@ -1,6 +1,11 @@
 import { StrictMode, useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { REMOVAL_REASON_NONE } from '../shared/api';
+import {
+  REMOVAL_REASON_NONE,
+  REMOVAL_REASON_AUTOMOD,
+  REMOVAL_REASON_AUTOMOD_PENDING,
+  REMOVAL_REASON_REDDIT_FILTER,
+} from '../shared/api';
 
 async function apiFetch(path, options = {}) {
   const response = await fetch(`/api${path}`, {
@@ -28,7 +33,13 @@ const TEXT_PRIMARY = '#f1f0ec';
 const TEXT_MUTED = '#6b6a66';
 const TEXT_SEC = '#9c9a92';
 
-const RULE_COLORS = [
+const AUTOMOD_REASON_KEYS = new Set([
+  REMOVAL_REASON_AUTOMOD,
+  REMOVAL_REASON_AUTOMOD_PENDING,
+  REMOVAL_REASON_REDDIT_FILTER,
+]);
+
+const BASE_RULE_COLORS = [
   '#f97316',
   '#ef4444',
   '#a855f7',
@@ -38,6 +49,12 @@ const RULE_COLORS = [
   '#ec4899',
   '#06b6d4',
 ];
+
+function getRuleColor(index: number): string {
+  if (index < BASE_RULE_COLORS.length) return BASE_RULE_COLORS[index];
+  const hue = (index * 47 + 120) % 360;
+  return `hsl(${hue}, 65%, 58%)`;
+}
 
 const Ic = ({ d, size = 16, color = 'currentColor', extra }) => (
   <svg
@@ -109,7 +126,7 @@ const IcMail = (p) => (
 const IcWarn = (p) => (
   <Ic
     {...p}
-    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0-3.42 0z"
     extra={
       <>
         <line x1="12" y1="9" x2="12" y2="13" />
@@ -177,11 +194,18 @@ const IcX = (p) => (
   />
 );
 
-const DonutChart = ({ data, total }) => {
+const DonutChart = ({
+  data,
+  total,
+  excludeAutomod = false,
+  colorOffset = 0,
+}) => {
   const entries = Object.entries(data)
     .filter(([k]) => k !== REMOVAL_REASON_NONE)
+    .filter(([k]) => !excludeAutomod || !AUTOMOD_REASON_KEYS.has(k))
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
+    .slice(0, 8);
+
   if (!entries.length || total === 0)
     return (
       <p
@@ -192,9 +216,10 @@ const DonutChart = ({ data, total }) => {
           padding: '20px 0',
         }}
       >
-        No rule data yet
+        No data yet
       </p>
     );
+
   const cx = 80,
     cy = 80,
     r = 62,
@@ -212,9 +237,10 @@ const DonutChart = ({ data, total }) => {
       pct,
       offset,
       dash,
-      color: RULE_COLORS[i % RULE_COLORS.length],
+      color: getRuleColor(i + colorOffset),
     };
   });
+
   return (
     <div
       style={{
@@ -582,7 +608,7 @@ const SLabel = ({ children, action }) => (
   </div>
 );
 
-const CardHead = ({ icon, title, accent = ORANGE_DIM }) => (
+const CardHead = ({ icon, title, subtitle = null, accent = ORANGE_DIM }) => (
   <div
     style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 14 }}
   >
@@ -600,18 +626,33 @@ const CardHead = ({ icon, title, accent = ORANGE_DIM }) => (
     >
       {icon}
     </div>
-    <p
-      style={{
-        fontSize: 10,
-        fontWeight: 700,
-        color: TEXT_MUTED,
-        textTransform: 'uppercase',
-        letterSpacing: '0.1em',
-        margin: 0,
-      }}
-    >
-      {title}
-    </p>
+    <div>
+      <p
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: TEXT_MUTED,
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          margin: 0,
+        }}
+      >
+        {title}
+      </p>
+      {subtitle && (
+        <p
+          style={{
+            fontSize: 10,
+            color: TEXT_MUTED,
+            margin: 0,
+            marginTop: 2,
+            opacity: 0.6,
+          }}
+        >
+          {subtitle}
+        </p>
+      )}
+    </div>
   </div>
 );
 
@@ -891,6 +932,124 @@ const DigestBanner = ({ onDismiss }) => (
   </div>
 );
 
+// ── FalsePositiveBanner ────────────────────────────────────────────────────
+const FalsePositiveBanner = ({ automodSt, automodEntries }) => {
+  const worstRule = automodEntries.reduce(
+    (best, [label, count]) =>
+      !best || count > best[1] ? [label, count] : best,
+    null
+  );
+  const trueAutomodTotal =
+    automodSt.totalRemovals + automodSt.falsePositiveCount;
+  const worstPct =
+    trueAutomodTotal > 0
+      ? Math.round((automodSt.falsePositiveCount / trueAutomodTotal) * 100)
+      : 0;
+
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        borderRadius: 12,
+        border: '1px solid rgba(234,179,8,0.22)',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Top row: overall false positive summary */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 14px',
+          background: 'rgba(234,179,8,0.07)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <IcWarn size={13} color="#eab308" />
+          <div>
+            <p
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: '#eab308',
+                margin: 0,
+              }}
+            >
+              {automodSt.falsePositiveCount} false positive
+              {automodSt.falsePositiveCount > 1 ? 's' : ''}
+            </p>
+            <p
+              style={{
+                fontSize: 10,
+                color: TEXT_MUTED,
+                margin: 0,
+                marginTop: 1,
+              }}
+            >
+              AutoMod removals later approved by a mod
+            </p>
+          </div>
+        </div>
+        <span
+          style={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: '#eab308',
+            background: 'rgba(234,179,8,0.12)',
+            padding: '3px 10px',
+            borderRadius: 99,
+            flexShrink: 0,
+          }}
+        >
+          {worstPct}% of all AutoMod
+        </span>
+      </div>
+
+      {/* Bottom row: most inaccurate rule callout */}
+      {worstRule && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '9px 14px',
+            background: 'rgba(234,179,8,0.03)',
+            borderTop: '1px solid rgba(234,179,8,0.12)',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              color: TEXT_MUTED,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              fontWeight: 700,
+              flexShrink: 0,
+            }}
+          >
+            Most inaccurate rule
+          </span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#eab308',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: '55%',
+              textAlign: 'right',
+            }}
+          >
+            {worstRule[0]}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1010,7 +1169,6 @@ export const App = () => {
               pointerEvents: 'none',
             }}
           />
-
           <h2
             style={{
               color: '#ef4444',
@@ -1023,7 +1181,6 @@ export const App = () => {
           >
             Access Restricted
           </h2>
-
           <p
             style={{
               color: 'rgba(255,255,255,0.58)',
@@ -1041,18 +1198,39 @@ export const App = () => {
     );
   }
 
+  // ── Derived values ──────────────────────────────────────────────────────
   const busiestDay = stats
     ? Object.entries(stats.byDay).sort((a, b) => b[1] - a[1])[0]
     : null;
+
   const topReason = stats
-    ? Object.entries(stats.byReason)
-        .filter(([r]) => r !== REMOVAL_REASON_NONE)
+    ? Object.entries(stats.manualReasons ?? stats.byReason)
+        .filter(
+          ([r]) => r !== REMOVAL_REASON_NONE && !AUTOMOD_REASON_KEYS.has(r)
+        )
         .sort((a, b) => b[1] - a[1])[0]
     : null;
-  const reasonEntries = stats ? Object.entries(stats.byReason) : [];
-  const visibleReasons = showAllReasons
-    ? reasonEntries
-    : reasonEntries.slice(0, 6);
+
+  const manualEntries = stats
+    ? Object.entries(stats.manualReasons ?? {})
+        .filter(
+          ([k]) => k !== REMOVAL_REASON_NONE && !AUTOMOD_REASON_KEYS.has(k)
+        )
+        .sort((a, b) => b[1] - a[1])
+    : [];
+  const manualTotal = manualEntries.reduce((s, [, v]) => s + v, 0);
+  const noReasonManualCount = stats?.manualReasons?.[REMOVAL_REASON_NONE] ?? 0;
+
+  const automodSt = stats?.automodStats ?? {
+    totalRemovals: 0,
+    byReason: {},
+    falsePositiveCount: 0,
+    falsePositiveRate: 0,
+  };
+  const automodEntries = Object.entries(automodSt.byReason).sort(
+    (a, b) => b[1] - a[1]
+  );
+
   const nowMins = Math.floor((Date.now() - lastUpdated) / 60000);
   const updatedLabel = nowMins < 1 ? 'just now' : `${nowMins}m ago`;
 
@@ -1105,7 +1283,6 @@ export const App = () => {
             overflow: 'hidden',
           }}
         >
-          {/* orange glow blob */}
           <div
             style={{
               position: 'absolute',
@@ -1118,9 +1295,7 @@ export const App = () => {
               pointerEvents: 'none',
             }}
           />
-
           <div style={{ position: 'relative', zIndex: 1 }}>
-            {/* Top row: logo+name LEFT — updated badge + refresh RIGHT */}
             <div
               style={{
                 display: 'flex',
@@ -1129,7 +1304,6 @@ export const App = () => {
                 marginBottom: 12,
               }}
             >
-              {/* Left: logo + title + subtitle */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div
                   style={{
@@ -1171,8 +1345,6 @@ export const App = () => {
                   </p>
                 </div>
               </div>
-
-              {/* Right: updated badge + refresh button */}
               <div
                 style={{
                   display: 'flex',
@@ -1220,8 +1392,6 @@ export const App = () => {
                 </button>
               </div>
             </div>
-
-            {/* Tab pills */}
             <div
               style={{
                 display: 'flex',
@@ -1303,7 +1473,7 @@ export const App = () => {
           </div>
         ) : !stats ? null : (
           <>
-            {/* OVERVIEW */}
+            {/* ══ OVERVIEW ══════════════════════════════════════════════════════ */}
             {tab === 'overview' && (
               <div
                 style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
@@ -1363,99 +1533,83 @@ export const App = () => {
                   <Card>
                     <CardHead
                       icon={<IcTarget size={13} color={ORANGE} />}
-                      title="By Rule"
+                      title="Manual Rules"
                     />
                     <DonutChart
-                      data={stats.byReason}
-                      total={stats.totalRemovals}
+                      data={stats.manualReasons ?? stats.byReason}
+                      total={manualTotal || stats.totalRemovals}
+                      excludeAutomod
                     />
                   </Card>
-                  {stats.topOffenders.length > 0 ? (
-                    <Card>
-                      <CardHead
-                        icon={<IcUser size={13} color="#ef4444" />}
-                        title={`Repeat Offenders (${stats.topOffenders.length})`}
-                        accent="rgba(239,68,68,0.12)"
-                      />
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                        }}
-                      >
-                        {stats.topOffenders.map((o, i) => (
-                          <div
-                            key={o.username}
+                  <Card>
+                    <CardHead
+                      icon={<IcTarget size={13} color="#a855f7" />}
+                      title="AutoMod Triggers"
+                      accent="rgba(168,85,247,0.12)"
+                    />
+                    <DonutChart
+                      data={automodSt.byReason}
+                      total={automodSt.totalRemovals}
+                      colorOffset={4}
+                    />
+                  </Card>
+                </div>
+                {stats.topOffenders.length > 0 && (
+                  <Card>
+                    <CardHead
+                      icon={<IcUser size={13} color="#ef4444" />}
+                      title={`Repeat Offenders (${stats.topOffenders.length})`}
+                      accent="rgba(239,68,68,0.12)"
+                    />
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}
+                    >
+                      {stats.topOffenders.map((o, i) => (
+                        <div
+                          key={o.username}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span
                             style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
+                              fontSize: 12,
+                              color: TEXT_SEC,
+                              fontWeight: 500,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                              minWidth: 0,
+                              marginRight: 8,
                             }}
                           >
-                            <span
-                              style={{
-                                fontSize: 12,
-                                color: TEXT_SEC,
-                                fontWeight: 500,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                flex: 1,
-                                minWidth: 0,
-                                marginRight: 8,
-                              }}
-                            >
-                              {i + 1}. u/{o.username}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                background: 'rgba(239,68,68,0.12)',
-                                color: '#ef4444',
-                                padding: '2px 9px',
-                                borderRadius: 99,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {o.count}x
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </Card>
-                  ) : topReason ? (
-                    <Card glow>
-                      <CardHead
-                        icon={<IcTarget size={13} color={ORANGE} />}
-                        title="Most Cited Rule"
-                      />
-                      <p
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 800,
-                          color: ORANGE,
-                          marginBottom: 4,
-                          letterSpacing: '-0.3px',
-                        }}
-                      >
-                        {topReason[0]}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: TEXT_MUTED,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {topReason[1]} of {stats.totalRemovals} (
-                        {Math.round((topReason[1] / stats.totalRemovals) * 100)}
-                        %)
-                      </p>
-                    </Card>
-                  ) : null}
-                </div>
+                            {i + 1}. u/{o.username}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: 'rgba(239,68,68,0.12)',
+                              color: '#ef4444',
+                              padding: '2px 9px',
+                              borderRadius: 99,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {o.count}x
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
 
                 {Object.keys(stats.byMod).length > 0 && (
                   <Card>
@@ -1619,16 +1773,29 @@ export const App = () => {
               </div>
             )}
 
-            {/* REASONS */}
+            {/* ══ REASONS ═══════════════════════════════════════════════════════ */}
             {tab === 'reasons' && (
               <div
                 style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
               >
-                {reasonEntries.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {reasonEntries
-                      .filter(([k]) => k !== REMOVAL_REASON_NONE)
-                      .map(([r], i) => (
+                {/* ── Manual removals ── */}
+                <Card glow>
+                  <CardHead
+                    icon={<IcTarget size={13} color={ORANGE} />}
+                    title={`Manual Removals · ${manualTotal} total`}
+                    subtitle="Rules applied by human mods"
+                  />
+
+                  {manualEntries.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 6,
+                        marginBottom: 14,
+                      }}
+                    >
+                      {manualEntries.map(([r], i) => (
                         <span
                           key={r}
                           style={{
@@ -1637,11 +1804,11 @@ export const App = () => {
                             gap: 5,
                             fontSize: 11,
                             fontWeight: 600,
-                            background: `${RULE_COLORS[i % RULE_COLORS.length]}18`,
-                            color: RULE_COLORS[i % RULE_COLORS.length],
+                            background: `${getRuleColor(i)}18`,
+                            color: getRuleColor(i),
                             padding: '3px 10px',
                             borderRadius: 99,
-                            border: `1px solid ${RULE_COLORS[i % RULE_COLORS.length]}22`,
+                            border: `1px solid ${getRuleColor(i)}22`,
                           }}
                         >
                           <span
@@ -1649,67 +1816,169 @@ export const App = () => {
                               width: 6,
                               height: 6,
                               borderRadius: '50%',
-                              background: RULE_COLORS[i % RULE_COLORS.length],
+                              background: getRuleColor(i),
                               display: 'inline-block',
                             }}
                           />
                           {r}
                         </span>
                       ))}
-                  </div>
-                )}
-                <Card glow>
-                  <SLabel
-                    action={
-                      Object.keys(stats.byReason).length > 6 && (
-                        <button
-                          onClick={() => setShowAllReasons((v) => !v)}
+                    </div>
+                  )}
+
+                  {manualEntries.length === 0 && noReasonManualCount === 0 ? (
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: TEXT_MUTED,
+                        padding: '12px 0',
+                      }}
+                    >
+                      No manual removals this week.
+                    </p>
+                  ) : (
+                    <>
+                      {manualEntries.map(([label, count], i) => (
+                        <HBar
+                          key={label}
+                          label={label}
+                          count={count}
+                          total={manualTotal}
+                          color={getRuleColor(i)}
+                        />
+                      ))}
+                      {noReasonManualCount > 0 && (
+                        <div
                           style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: ORANGE,
-                            background: ORANGE_DIM,
-                            border: `1px solid ${ORANGE_BORDER}`,
-                            borderRadius: 99,
-                            padding: '4px 12px',
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 9,
+                            marginTop: 8,
+                            padding: '9px 12px',
+                            borderRadius: 10,
+                            background: 'rgba(239,68,68,0.07)',
+                            border: '1px solid rgba(239,68,68,0.15)',
                           }}
                         >
-                          {showAllReasons
-                            ? 'Show less'
-                            : `Show all ${Object.keys(stats.byReason).length}`}
-                        </button>
-                      )
-                    }
-                  >
-                    Removal Reasons · {stats.totalRemovals} total
-                  </SLabel>
-                  {visibleReasons.map(([label, count], i) => (
-                    <HBar
-                      key={label}
-                      label={label}
-                      count={count}
-                      total={stats.totalRemovals}
-                      color={RULE_COLORS[i % RULE_COLORS.length]}
-                    />
-                  ))}
+                          <IcWarn size={13} color="#ef4444" />
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: '#ef4444',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {noReasonManualCount} removal
+                            {noReasonManualCount > 1 ? 's' : ''} with no reason
+                            selected
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </Card>
+
+                {/* ── AutoMod removals ── */}
+                <Card style={{ borderColor: 'rgba(168,85,247,0.2)' }}>
+                  <CardHead
+                    icon={<IcTarget size={13} color="#a855f7" />}
+                    title={`AutoMod Removals · ${automodSt.totalRemovals + automodSt.falsePositiveCount} total`}
+                    subtitle="Automated catches - false positive rate below"
+                    accent="rgba(168,85,247,0.12)"
+                  />
+
+                  {automodEntries.length === 0 ? (
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: TEXT_MUTED,
+                        padding: '12px 0',
+                      }}
+                    >
+                      No AutoMod removals this week.
+                    </p>
+                  ) : (
+                    automodEntries.map(([label, count], i) => (
+                      <HBar
+                        key={label}
+                        label={label}
+                        count={count}
+                        total={automodSt.totalRemovals}
+                        color={getRuleColor(i + 4)}
+                      />
+                    ))
+                  )}
+
+                  {/* False positive banner */}
+                  {automodSt.falsePositiveCount > 0 ? (
+                    <FalsePositiveBanner
+                      automodSt={automodSt}
+                      automodEntries={automodEntries}
+                    />
+                  ) : automodSt.totalRemovals > 0 ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginTop: 14,
+                        padding: '9px 12px',
+                        borderRadius: 10,
+                        background: 'rgba(16,185,129,0.06)',
+                        border: '1px solid rgba(16,185,129,0.15)',
+                      }}
+                    >
+                      <IcCheck size={13} color="#10b981" />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: '#10b981',
+                          fontWeight: 600,
+                        }}
+                      >
+                        No false positives this week
+                      </span>
+                    </div>
+                  ) : null}
+                </Card>
+
+                {/* ── Day breakdown ── */}
                 <Card>
                   <SLabel>Day-wise Breakdown</SLabel>
                   <DayChart data={stats.byDay} />
                 </Card>
-                <Card>
-                  <SLabel>Rule Distribution</SLabel>
-                  <DonutChart
-                    data={stats.byReason}
-                    total={stats.totalRemovals}
-                  />
-                </Card>
+
+                {/* ── Two donuts side by side ── */}
+                <div
+                  className="two-col"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: 12,
+                  }}
+                >
+                  <Card>
+                    <SLabel>Manual rule distribution</SLabel>
+                    <DonutChart
+                      data={stats.manualReasons ?? {}}
+                      total={manualTotal}
+                      excludeAutomod
+                      colorOffset={0}
+                    />
+                  </Card>
+                  <Card>
+                    <SLabel>AutoMod trigger distribution</SLabel>
+                    <DonutChart
+                      data={automodSt.byReason}
+                      total={automodSt.totalRemovals}
+                      colorOffset={4}
+                    />
+                  </Card>
+                </div>
               </div>
             )}
 
-            {/* RECENT */}
+            {/* ══ RECENT ════════════════════════════════════════════════════════ */}
             {tab === 'recent' && (
               <Card>
                 <SLabel>

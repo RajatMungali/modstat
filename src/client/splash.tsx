@@ -352,7 +352,7 @@ const Splash = () => {
               letterSpacing: '0.01em',
             }}
           >
-            Track removals, repeat offenders, and rule trends — delivered to
+            Track removals, repeat offenders, and rule trends - delivered to
             your inbox.
           </p>
 

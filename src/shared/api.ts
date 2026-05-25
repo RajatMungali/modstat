@@ -1,17 +1,6 @@
-// ============================================
-// MODSTAT — Shared Types
-// ============================================
-
-/** Shown when a human mod removes without selecting a removal reason. */
 export const REMOVAL_REASON_NONE = 'No removal reason selected';
-
-/** AutoMod filtered to queue; not yet confirmed by a human mod. */
 export const REMOVAL_REASON_AUTOMOD_PENDING = 'AutoMod (mod queue)';
-
-/** AutoMod removal confirmed or logged as AutoMod. */
 export const REMOVAL_REASON_AUTOMOD = 'AutoMod';
-
-/** Reddit spam/filter pipeline (u/reddit). */
 export const REMOVAL_REASON_REDDIT_FILTER = 'Reddit filter';
 
 export type RemovalEntry = {
@@ -23,18 +12,29 @@ export type RemovalEntry = {
   modName: string;
   removalReason: string;
   timestamp: number;
+  approved?: boolean; // ← new: true when approvelink fires
+  approvedAt?: number; // ← new: timestamp of approval
+};
+
+export type AutomodStats = {
+  totalRemovals: number;
+  byReason: Record<string, number>;
+  falsePositiveCount: number;
+  falsePositiveRate: number; // 0–1
 };
 
 export type WeeklyStats = {
   totalRemovals: number;
   byReason: Record<string, number>;
+  manualReasons: Record<string, number>; // ← new: human mod removals only
+  automodStats: AutomodStats; // ← new: automod breakdown
   byMod: Record<string, number>;
   byDay: Record<string, number>;
   topOffenders: Array<{ username: string; count: number }>;
   weekStart: number;
   weekEnd: number;
   postCount: number;
-  commentCount: number; // ← add this
+  commentCount: number;
 };
 
 export type InitResponse = {

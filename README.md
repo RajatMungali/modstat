@@ -2,7 +2,7 @@
 
 ModStat is a Dev Platform app that helps Reddit moderators track removed posts and comments, identify the most enforced rules, detect repeat offenders, and generate automatic weekly moderation reports.
 
-Once installed, ModStat automatically listens for moderator and AutoMod removal actions in your subreddit and stores analytics like removal reasons, moderator activity, daily trends, repeat offenders, and AutoMod performance — all inside a clean moderation dashboard.
+Once installed, ModStat automatically listens for moderator and AutoMod removal actions in your subreddit and stores analytics like removal reasons, moderator activity, daily trends, repeat offenders, and AutoMod performance - all inside a clean moderation dashboard.
 
 ---
 
